@@ -3,8 +3,26 @@ import type {
   SnapshotPublic,
   Visibility,
 } from "@sfl-digging-hub/shared";
+import {
+  claimCommentsForUser,
+  createSession,
+  findOrCreateUser,
+  getUserFromSession,
+  sessionTokenFromRequest,
+  verifyGoogleIdToken,
+} from "./auth";
 import { corsHeaders, parseAllowedOrigins } from "./cors";
 import { randomId, sha256Hex } from "./crypto";
+import {
+  emptyDigDay,
+  getDigDayRow,
+  isValidLandId,
+  listLandDays,
+  rowToDigDay,
+  saveDigDay,
+  validateDigDayBody,
+  verifyWriteSecret,
+} from "./digDay";
 import {
   createSnapshot,
   getSnapshotById,
@@ -18,10 +36,11 @@ import {
 export interface Env {
   DB: D1Database;
   SCREENSHOTS: R2Bucket;
-  /** Vue SPA (apps/web/dist) — Workers static assets, not Pages */
   ASSETS?: Fetcher;
   CORS_ORIGINS?: string;
   HUB_BASE_URL?: string;
+  HUB_WRITE_SECRET?: string;
+  GOOGLE_CLIENT_ID?: string;
 }
 
 type CommentRow = {
@@ -31,6 +50,8 @@ type CommentRow = {
   body: string;
   dig_ref: number | null;
   created_at: string;
+  user_id: string | null;
+  anonymous_id: string | null;
 };
 
 function json(data: unknown, status = 200, extraHeaders: HeadersInit = {}): Response {
@@ -41,9 +62,8 @@ function error(message: string, status: number, cors: HeadersInit): Response {
   return json({ error: message }, status, cors);
 }
 
-function canViewSnapshot(row: SnapshotRow, editToken: string | null): boolean {
-  if (row.visibility === "public" || row.visibility === "unlisted") return true;
-  return false;
+function canViewSnapshot(row: SnapshotRow): boolean {
+  return row.visibility === "public" || row.visibility === "unlisted";
 }
 
 async function checkCommentRate(db: D1Database, ipHash: string): Promise<boolean> {
@@ -85,8 +105,115 @@ export default {
         return json({ ok: true, service: "sfl-digging-hub-api" }, 200, cors);
       }
 
-      if (path === "/v1/snapshots" && request.method === "POST") {
+      if (path === "/v1/dig-day" && request.method === "GET") {
+        const landId = String(url.searchParams.get("landId") || "");
+        const utcDate =
+          url.searchParams.get("utcDate") ||
+          new Date().toISOString().slice(0, 10);
+        if (!isValidLandId(landId)) {
+          return error("Invalid landId", 400, cors);
+        }
+        const row = await getDigDayRow(env.DB, landId, utcDate);
+        if (!row) {
+          return json(emptyDigDay(landId, utcDate), 404, {
+            ...cors,
+            "Cache-Control": "public, max-age=30, must-revalidate",
+          });
+        }
+        return json(rowToDigDay(row), 200, {
+          ...cors,
+          "Cache-Control": "public, max-age=30, must-revalidate",
+        });
+      }
+
+      if (path === "/v1/dig-day" && request.method === "POST") {
+        if (!verifyWriteSecret(request, env.HUB_WRITE_SECRET)) {
+          return error("Unauthorized", 401, cors);
+        }
         const raw = await request.json().catch(() => null);
+        const validated = validateDigDayBody(raw);
+        if (typeof validated === "string") return error(validated, 400, cors);
+        try {
+          const saved = await saveDigDay(env.DB, validated, hubBase);
+          return json(saved, 200, { ...cors, "Cache-Control": "no-store" });
+        } catch (e) {
+          const err = e as Error & { statusCode?: number };
+          if (err.statusCode === 413) return error(err.message, 413, cors);
+          throw e;
+        }
+      }
+
+      const landDaysMatch = path.match(/^\/v1\/lands\/(\d{1,12})\/days$/);
+      if (landDaysMatch && request.method === "GET") {
+        const landId = landDaysMatch[1];
+        const days = await listLandDays(env.DB, landId);
+        const base = hubBase.replace(/\/$/, "");
+        return json(
+          {
+            landId,
+            days: days.map((d) => ({
+              ...d,
+              replayUrl: `${base}/replay/${d.id}`,
+            })),
+          },
+          200,
+          cors,
+        );
+      }
+
+      if (path === "/v1/auth/google" && request.method === "POST") {
+        const body = (await request.json().catch(() => null)) as {
+          idToken?: string;
+          anonymousId?: string;
+        } | null;
+        if (!body?.idToken) return error("idToken required", 400, cors);
+        const email = await verifyGoogleIdToken(body.idToken, env.GOOGLE_CLIENT_ID);
+        if (!email) return error("Invalid Google token", 401, cors);
+        const user = await findOrCreateUser(env.DB, email);
+        const sessionToken = await createSession(env.DB, user.id);
+        let claimed = 0;
+        if (body.anonymousId) {
+          claimed = await claimCommentsForUser(env.DB, user.id, body.anonymousId);
+        }
+        return json(
+          { email: user.email, sessionToken, claimedComments: claimed },
+          200,
+          cors,
+        );
+      }
+
+      if (path === "/v1/auth/session" && request.method === "GET") {
+        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        if (!user) return error("Not signed in", 401, cors);
+        return json({ email: user.email }, 200, cors);
+      }
+
+      if (path === "/v1/auth/claim-comments" && request.method === "POST") {
+        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        if (!user) return error("Not signed in", 401, cors);
+        const body = (await request.json().catch(() => null)) as {
+          anonymousId?: string;
+        } | null;
+        if (!body?.anonymousId) return error("anonymousId required", 400, cors);
+        const claimed = await claimCommentsForUser(
+          env.DB,
+          user.id,
+          body.anonymousId,
+        );
+        return json({ claimedComments: claimed }, 200, cors);
+      }
+
+      if (path === "/v1/snapshots" && request.method === "POST") {
+        if (!verifyWriteSecret(request, env.HUB_WRITE_SECRET)) {
+          return error("Unauthorized", 401, cors);
+        }
+        const raw = await request.json().catch(() => null);
+        if (raw && typeof raw === "object" && "landId" in raw && "digs" in raw) {
+          const validated = validateDigDayBody(raw);
+          if (typeof validated === "string") return error(validated, 400, cors);
+          const saved = await saveDigDay(env.DB, validated, hubBase);
+          return json(saved, 201, cors);
+        }
         const validated = validateCreateBody(raw);
         if (typeof validated === "string") return error(validated, 400, cors);
         const result = await createSnapshot(env.DB, validated as CreateSnapshotBody, hubBase);
@@ -95,10 +222,7 @@ export default {
 
       if (path === "/v1/snapshots/mine" && request.method === "GET") {
         const landId = url.searchParams.get("land_id");
-        const editToken = request.headers.get("X-Edit-Token") ?? url.searchParams.get("edit_token");
-        if (!landId || !editToken) {
-          return error("land_id and X-Edit-Token (or edit_token) required", 400, cors);
-        }
+        if (!landId) return error("land_id required", 400, cors);
         const landHash = await hashLandId(landId);
         const rows = await env.DB
           .prepare(
@@ -106,21 +230,18 @@ export default {
           )
           .bind(landHash)
           .all<SnapshotRow>();
-
-        const mine: SnapshotPublic[] = [];
-        for (const row of rows.results ?? []) {
-          if (await verifyEditToken(row, editToken)) {
-            mine.push(rowToPublic(row));
-          }
-        }
-        return json({ snapshots: mine }, 200, cors);
+        return json(
+          { snapshots: (rows.results ?? []).map((r) => rowToPublic(r)) },
+          200,
+          cors,
+        );
       }
 
       if (path === "/v1/community" && request.method === "GET") {
         const date = url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
         const rows = await env.DB
           .prepare(
-            `SELECT id, utc_date, display_name, visibility, created_at, digs_json, stats_json
+            `SELECT id, utc_date, land_id, display_name, visibility, created_at, digs_json, stats_json
              FROM snapshots WHERE visibility = 'public' AND utc_date = ?
              ORDER BY created_at DESC LIMIT 50`,
           )
@@ -128,8 +249,8 @@ export default {
           .all<{
             id: string;
             utc_date: string;
+            land_id: string | null;
             display_name: string | null;
-            visibility: string;
             created_at: string;
             digs_json: string;
             stats_json: string;
@@ -141,6 +262,7 @@ export default {
           return {
             id: r.id,
             utcDate: r.utc_date,
+            landId: r.land_id,
             displayName: r.display_name,
             digCount: Array.isArray(digs) ? digs.length : 0,
             stats,
@@ -161,7 +283,7 @@ export default {
 
         if (request.method === "GET") {
           const allowedView =
-            row.visibility !== "private" ||
+            canViewSnapshot(row) ||
             (editToken ? await verifyEditToken(row, editToken) : false);
           if (!allowedView) return error("Snapshot not found", 404, cors);
           return json(rowToPublic(row), 200, cors);
@@ -202,7 +324,7 @@ export default {
         if (!row) return error("Snapshot not found", 404, cors);
 
         if (request.method === "GET") {
-          if (!canViewSnapshot(row, null) && row.visibility === "private") {
+          if (!canViewSnapshot(row) && row.visibility === "private") {
             const editToken = request.headers.get("X-Edit-Token");
             if (!(await verifyEditToken(row, editToken))) {
               return error("Snapshot not found", 404, cors);
@@ -210,7 +332,7 @@ export default {
           }
           const comments = await env.DB
             .prepare(
-              `SELECT id, snapshot_id, display_name, body, dig_ref, created_at
+              `SELECT id, snapshot_id, display_name, body, dig_ref, created_at, user_id, anonymous_id
                FROM comments WHERE snapshot_id = ? ORDER BY created_at ASC`,
             )
             .bind(snapshotId)
@@ -223,6 +345,7 @@ export default {
                 body: c.body,
                 digRef: c.dig_ref,
                 createdAt: c.created_at,
+                owned: Boolean(c.user_id),
               })),
             },
             200,
@@ -231,7 +354,7 @@ export default {
         }
 
         if (request.method === "POST") {
-          if (!canViewSnapshot(row, null) && row.visibility === "private") {
+          if (!canViewSnapshot(row) && row.visibility === "private") {
             return error("Cannot comment on private snapshot", 403, cors);
           }
           const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
@@ -248,6 +371,14 @@ export default {
             return error("Rate limit exceeded", 429, cors);
           }
 
+          const sessionUser = await getUserFromSession(
+            env.DB,
+            sessionTokenFromRequest(request),
+          );
+          const anonymousId =
+            typeof body.anonymousId === "string"
+              ? body.anonymousId.slice(0, 64)
+              : null;
           const digRef =
             typeof body.digRef === "number" && Number.isInteger(body.digRef)
               ? body.digRef
@@ -256,14 +387,30 @@ export default {
           const createdAt = new Date().toISOString();
           await env.DB
             .prepare(
-              `INSERT INTO comments (id, snapshot_id, display_name, body, dig_ref, created_at)
-               VALUES (?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO comments (id, snapshot_id, display_name, body, dig_ref, created_at, user_id, anonymous_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             )
-            .bind(id, snapshotId, displayName, text, digRef, createdAt)
+            .bind(
+              id,
+              snapshotId,
+              displayName,
+              text,
+              digRef,
+              createdAt,
+              sessionUser?.id ?? null,
+              sessionUser ? null : anonymousId,
+            )
             .run();
 
           return json(
-            { id, displayName, body: text, digRef, createdAt },
+            {
+              id,
+              displayName,
+              body: text,
+              digRef,
+              createdAt,
+              owned: Boolean(sessionUser),
+            },
             201,
             cors,
           );
@@ -272,13 +419,12 @@ export default {
 
       const screenshotMatch = path.match(/^\/v1\/snapshots\/([^/]+)\/screenshot$/);
       if (screenshotMatch && request.method === "POST") {
+        if (!verifyWriteSecret(request, env.HUB_WRITE_SECRET)) {
+          return error("Unauthorized", 401, cors);
+        }
         const snapshotId = screenshotMatch[1];
         const row = await getSnapshotById(env.DB, snapshotId);
         if (!row) return error("Snapshot not found", 404, cors);
-        const editToken = request.headers.get("X-Edit-Token");
-        if (!(await verifyEditToken(row, editToken))) {
-          return error("Invalid edit token", 403, cors);
-        }
 
         const contentType = request.headers.get("Content-Type") ?? "image/png";
         if (!contentType.startsWith("image/")) {

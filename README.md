@@ -138,10 +138,10 @@ Hub does **not** need `useGridEngine` for v1 replay — a read-only replay grid 
 - [x] 1. Scaffold sfl-digging-hub: Worker + D1 migration + health + CORS
 - [x] 2. Snapshot POST/GET + minimal “replay JSON loads” page
 - [x] 3. Hub UI: replay viewer + journal list
-- [ ] 4. sfl-crab PR: Share button → POST snapshot, open hub URL
+- [x] 4. d1g.uk dig-day → hub D1 (Netlify proxy; same `/api/dig-day` for Vue)
 - [x] 5. Community feed + comments + R2 upload (API; brag card UI later)
 - [ ] 6. Brag card PNG + Open Graph for Discord links
-- [ ] 7. Beta deploy on chosen subdomain; then prod
+- [x] 7. Beta deploy (`beta.hub.d1g.uk`, `beta.api.d1g.uk`); prod domains when ready
 
 ## Development
 

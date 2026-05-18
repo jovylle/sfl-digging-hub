@@ -49,7 +49,14 @@ curl -I https://beta.hub.d1g.uk/
 
 Browser: https://beta.hub.d1g.uk/
 
-### 5. Git deploy (Cloudflare dashboard)
+### 5. Secrets (dashboard)
+
+Set on **beta** Worker (and Netlify for d1g.uk):
+
+- `HUB_WRITE_SECRET` — shared with Netlify `HUB_WRITE_SECRET` (dig-day proxy)
+- `GOOGLE_CLIENT_ID` — optional; Google sign-in for comments (email only)
+
+### 6. Git deploy (Cloudflare dashboard)
 
 Until production is ready, set **Deploy command** to:
 

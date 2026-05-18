@@ -1,2 +1,3 @@
-# Copy to .dev.vars for local wrangler dev (optional overrides)
-# CORS_ORIGINS=http://localhost:5173,https://d1g.uk
+# Copy to workers/.dev.vars for local wrangler dev
+HUB_WRITE_SECRET=dev-secret-change-me
+# GOOGLE_CLIENT_ID=your-google-oauth-client-id.apps.googleusercontent.com

@@ -1,19 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
 import type { DigEntry, SnapshotPublic } from "@sfl-digging-hub/shared";
 import {
   getComments,
   getSnapshot,
-  loadJournalCreds,
   postComment,
   type Comment,
 } from "@/api/client";
+import GoogleSignIn from "@/components/GoogleSignIn.vue";
 import ReplayGrid from "@/components/ReplayGrid.vue";
 import ReplayControls from "@/components/ReplayControls.vue";
 
 const props = defineProps<{ id: string }>();
-const route = useRoute();
 
 const snapshot = ref<SnapshotPublic | null>(null);
 const error = ref<string | null>(null);
@@ -24,6 +22,7 @@ const comments = ref<Comment[]>([]);
 const commentName = ref("");
 const commentBody = ref("");
 const commentDigRef = ref<number | "">("");
+const sessionEmail = ref<string | null>(null);
 
 const digs = computed<DigEntry[]>(() => snapshot.value?.digs ?? []);
 const maxStep = computed(() => Math.max(0, digs.value.length - 1));
@@ -36,11 +35,9 @@ const currentDig = computed(() => {
 async function load() {
   error.value = null;
   snapshot.value = null;
-  const editToken =
-    (route.query.token as string | undefined) ?? loadJournalCreds()?.editToken;
   try {
-    snapshot.value = await getSnapshot(props.id, editToken);
-    const c = await getComments(props.id, editToken);
+    snapshot.value = await getSnapshot(props.id);
+    const c = await getComments(props.id);
     comments.value = c.comments;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Failed to load replay";
@@ -62,6 +59,12 @@ async function submitComment() {
   }
 }
 
+function onSignedIn(email: string) {
+  sessionEmail.value = email;
+  const prefix = email.split("@")[0]?.slice(0, 32);
+  if (prefix && !commentName.value.trim()) commentName.value = prefix;
+}
+
 onMounted(load);
 watch(() => props.id, load);
 </script>
@@ -75,8 +78,7 @@ watch(() => props.id, load);
         {{ snapshot.displayName || "Desert dig" }}
       </h1>
       <p class="text-stone-400 text-sm">
-        {{ snapshot.utcDate }} · {{ snapshot.digs.length }} digs ·
-        {{ snapshot.visibility }}
+        {{ snapshot.utcDate }} · {{ snapshot.digs.length }} digs
       </p>
     </header>
 
@@ -106,6 +108,7 @@ watch(() => props.id, load);
 
     <div class="border-t border-stone-800 pt-6 space-y-4">
       <h2 class="font-semibold">Comments</h2>
+      <GoogleSignIn @signed-in="onSignedIn" />
       <ul v-if="comments.length" class="space-y-3 text-sm">
         <li
           v-for="c in comments"
@@ -113,6 +116,7 @@ watch(() => props.id, load);
           class="rounded bg-stone-900 border border-stone-800 p-3"
         >
           <span class="font-medium text-amber-300">{{ c.displayName }}</span>
+          <span v-if="c.owned" class="text-stone-600 text-xs ml-1">· verified</span>
           <span v-if="c.digRef != null" class="text-stone-500"> · dig #{{ c.digRef }}</span>
           <p class="text-stone-300 mt-1">{{ c.body }}</p>
         </li>

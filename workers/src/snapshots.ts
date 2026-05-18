@@ -11,15 +11,17 @@ import { randomId, randomToken, sha256Hex } from "./crypto";
 export type SnapshotRow = {
   id: string;
   utc_date: string;
+  land_id: string | null;
   land_id_hash: string;
   display_name: string | null;
   patterns_json: string;
   digs_json: string;
   stats_json: string;
   marks_json: string | null;
+  mark_events_json: string | null;
   visibility: Visibility;
   screenshot_key: string | null;
-  edit_token_hash: string;
+  edit_token_hash: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -143,7 +145,7 @@ export async function verifyEditToken(
   row: SnapshotRow,
   token: string | null,
 ): Promise<boolean> {
-  if (!token) return false;
+  if (!token || !row.edit_token_hash) return false;
   const hash = await hashEditToken(token);
   return hash === row.edit_token_hash;
 }

@@ -50,7 +50,9 @@ watch(date, load);
         class="flex items-center justify-between gap-4 rounded-lg border border-stone-800 bg-stone-900 px-4 py-3"
       >
         <div>
-          <p class="font-medium">{{ item.displayName || "Anonymous digger" }}</p>
+          <p class="font-medium">
+            {{ item.displayName || (item.landId ? `Land ${item.landId}` : "Desert dig") }}
+          </p>
           <p class="text-stone-500 text-sm">{{ item.digCount }} digs</p>
         </div>
         <RouterLink
