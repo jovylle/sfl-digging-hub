@@ -1,0 +1,67 @@
+# Cloudflare Worker — SFL Digging Hub API
+# Setup: docs/CLOUDFLARE_SETUP.md
+#
+# After: wrangler d1 create sfl-digging-hub
+# Paste the real database_id below (local placeholder is for wrangler dev only).
+
+name = "sfl-digging-hub-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# Uncomment if deploy says account is missing:
+# account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sfl-digging-hub"
+database_id = "00000000-0000-0000-0000-000000000001"
+
+[[r2_buckets]]
+binding = "SCREENSHOTS"
+bucket_name = "sfl-digging-hub-screenshots"
+
+[vars]
+CORS_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+HUB_BASE_URL = "http://localhost:5173"
+API_BASE_URL = "http://localhost:8787"
+
+[dev]
+port = 8787
+
+# --- Production (deploy: wrangler deploy --env production) ---
+
+[env.production]
+name = "sfl-digging-hub-api"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "sfl-digging-hub"
+database_id = "00000000-0000-0000-0000-000000000001"
+
+[[env.production.r2_buckets]]
+binding = "SCREENSHOTS"
+bucket_name = "sfl-digging-hub-screenshots"
+
+[env.production.vars]
+CORS_ORIGINS = "https://d1g.uk,https://beta.d1g.uk,https://development.d1g.uk,https://hub.d1g.uk"
+HUB_BASE_URL = "https://hub.d1g.uk"
+API_BASE_URL = "https://api.d1g.uk"
+
+# --- Beta (optional) ---
+
+[env.beta]
+name = "sfl-digging-hub-api-beta"
+
+[[env.beta.d1_databases]]
+binding = "DB"
+database_name = "sfl-digging-hub-beta"
+database_id = "00000000-0000-0000-0000-000000000002"
+
+[[env.beta.r2_buckets]]
+binding = "SCREENSHOTS"
+bucket_name = "sfl-digging-hub-screenshots-beta"
+
+[env.beta.vars]
+CORS_ORIGINS = "https://d1g.uk,https://beta.d1g.uk,https://development.d1g.uk,https://hub-beta.d1g.uk,http://localhost:5173"
+HUB_BASE_URL = "https://hub-beta.d1g.uk"
+API_BASE_URL = "https://api-beta.d1g.uk"

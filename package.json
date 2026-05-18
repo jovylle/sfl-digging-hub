@@ -1,0 +1,20 @@
+{
+  "name": "sfl-digging-hub",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "workers",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @sfl-digging-hub/web",
+    "dev:api": "npm run dev -w @sfl-digging-hub/worker",
+    "build": "npm run build -w @sfl-digging-hub/shared && npm run build -w @sfl-digging-hub/worker && npm run build -w @sfl-digging-hub/web",
+    "db:migrate:local": "npm run db:migrate:local -w @sfl-digging-hub/worker",
+    "cf:setup": "bash workers/scripts/cf-setup.sh",
+    "cf:migrate:remote": "npm run cf:migrate -w @sfl-digging-hub/worker",
+    "cf:deploy": "npm run deploy -w @sfl-digging-hub/worker"
+  }
+}
