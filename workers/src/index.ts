@@ -18,6 +18,8 @@ import {
 export interface Env {
   DB: D1Database;
   SCREENSHOTS: R2Bucket;
+  /** Vue SPA (apps/web/dist) — Workers static assets, not Pages */
+  ASSETS?: Fetcher;
   CORS_ORIGINS?: string;
   HUB_BASE_URL?: string;
 }
@@ -295,6 +297,13 @@ export default {
           .run();
 
         return json({ screenshotKey: key }, 200, cors);
+      }
+
+      if (
+        env.ASSETS &&
+        (request.method === "GET" || request.method === "HEAD")
+      ) {
+        return env.ASSETS.fetch(request);
       }
 
       return error("Not found", 404, cors);
