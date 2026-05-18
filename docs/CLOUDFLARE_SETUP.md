@@ -128,7 +128,24 @@ CORS_ORIGINS = "https://d1g.uk,https://beta.d1g.uk,https://development.d1g.uk,ht
 | **Production branch** | `master` |
 | **Root directory** | `/` (repo root) |
 | **Build command** | `npm ci && npm run build -w @sfl-digging-hub/shared && npm run build -w @sfl-digging-hub/web` |
-| **Deploy command** | `cd workers && npx wrangler deploy --env production` |
+| **Deploy command** | `npm run cf:upload:production` |
+
+For **beta**, use `npm run cf:upload:beta` instead.
+
+Cloudflare’s default `npx wrangler versions upload` runs from the repo root and fails with *“Missing entry-point”* because `wrangler.toml` lives in `workers/`. The scripts above pass `--config workers/wrangler.toml` and the right `--env`.
+
+Equivalent one-liners:
+
+```bash
+npx wrangler versions upload --config workers/wrangler.toml --env production
+npx wrangler versions upload --config workers/wrangler.toml --env beta
+```
+
+Legacy `wrangler deploy` also works if your project still uses it:
+
+```bash
+cd workers && npx wrangler deploy --env production
+```
 
 No separate Pages project. The Vue `dist` folder is uploaded as **Worker assets** via `wrangler.toml` `[assets]`.
 
@@ -188,6 +205,7 @@ npx wrangler deploy --env beta
 
 | Problem | Fix |
 |---------|-----|
+| Deploy: *Missing entry-point to Worker script* | Set deploy command to `npm run cf:upload:production` (or beta), not bare `npx wrangler versions upload` from repo root |
 | Hub UI 404 | Run `npm run build -w @sfl-digging-hub/web` before deploy; check `[assets] directory` |
 | `/replay` refresh 404 | `not_found_handling = "single-page-application"` in `wrangler.toml` |
 | CORS from d1g.uk | Add origin to `CORS_ORIGINS`, redeploy |
