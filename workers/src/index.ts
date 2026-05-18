@@ -18,7 +18,7 @@ import {
   getDigDayRow,
   isValidLandId,
   listLandDays,
-  rowToDigDay,
+  rowToDigDayWithReplay,
   saveDigDay,
   validateDigDayBody,
   verifyWriteSecret,
@@ -120,7 +120,7 @@ export default {
             "Cache-Control": "public, max-age=30, must-revalidate",
           });
         }
-        return json(rowToDigDay(row), 200, {
+        return json(rowToDigDayWithReplay(row, hubBase), 200, {
           ...cors,
           "Cache-Control": "public, max-age=30, must-revalidate",
         });

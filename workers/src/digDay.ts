@@ -129,6 +129,19 @@ export function rowToDigDay(row: SnapshotRow): DigDayPayload {
   };
 }
 
+/** GET /v1/dig-day — same payload as POST save, including shareable replay link. */
+export function rowToDigDayWithReplay(
+  row: SnapshotRow,
+  hubBaseUrl: string,
+): DigDayPayload & { id: string; replayUrl: string } {
+  const base = hubBaseUrl.replace(/\/$/, "");
+  return {
+    ...rowToDigDay(row),
+    id: row.id,
+    replayUrl: `${base}/replay/${row.id}`,
+  };
+}
+
 export async function getDigDayRow(
   db: D1Database,
   landId: string,
