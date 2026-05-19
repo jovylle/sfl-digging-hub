@@ -194,3 +194,44 @@ export async function listPracticeLeaderboard(
     .all<PracticeRunRow>();
   return (rows.results ?? []).map((r) => rowToEntry(r, options.viewerUserId));
 }
+
+/** Chronological list of victorious runs (newest first), like the community dig feed. */
+export async function listRecentPracticeVictories(
+  db: D1Database,
+  options: {
+    source: PracticePatternSource;
+    date?: string;
+    windowDays?: number;
+    limit?: number;
+    viewerUserId?: string | null;
+  },
+): Promise<PracticeLeaderboardEntry[]> {
+  const limit = Math.min(100, Math.max(1, options.limit ?? 50));
+
+  if (options.source === "daily") {
+    const date = options.date ?? new Date().toISOString().slice(0, 10);
+    const rows = await db
+      .prepare(
+        `SELECT * FROM practice_runs
+         WHERE pattern_source = 'daily' AND pattern_date = ? AND victory = 1
+         ORDER BY created_at DESC
+         LIMIT ?`,
+      )
+      .bind(date, limit)
+      .all<PracticeRunRow>();
+    return (rows.results ?? []).map((r) => rowToEntry(r, options.viewerUserId));
+  }
+
+  const windowDays = options.windowDays ?? 7;
+  const since = new Date(Date.now() - windowDays * 86_400_000).toISOString();
+  const rows = await db
+    .prepare(
+      `SELECT * FROM practice_runs
+       WHERE pattern_source = 'random' AND created_at >= ? AND victory = 1
+       ORDER BY created_at DESC
+       LIMIT ?`,
+    )
+    .bind(since, limit)
+    .all<PracticeRunRow>();
+  return (rows.results ?? []).map((r) => rowToEntry(r, options.viewerUserId));
+}

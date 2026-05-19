@@ -171,3 +171,19 @@ export function getPracticeLeaderboard(options: {
   }
   return request(`/v1/practice/leaderboard?${params.toString()}`);
 }
+
+/** Recent practice victories, newest first (like the community dig list). */
+export function getPracticeVictories(options: {
+  source: PracticePatternSource;
+  date?: string;
+}): Promise<{
+  source: PracticePatternSource;
+  date: string;
+  entries: PracticeLeaderboardEntry[];
+}> {
+  const params = new URLSearchParams({ source: options.source });
+  if (options.source === "daily" && options.date) {
+    params.set("date", options.date);
+  }
+  return request(`/v1/practice/victories?${params.toString()}`);
+}

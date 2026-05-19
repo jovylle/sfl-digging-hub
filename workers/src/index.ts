@@ -26,6 +26,7 @@ import {
 } from "./digDay";
 import {
   listPracticeLeaderboard,
+  listRecentPracticeVictories,
   savePracticeRun,
   validatePracticeRunBody,
 } from "./practice";
@@ -322,6 +323,37 @@ export default {
           source: sourceParam,
           date: url.searchParams.get("date") ?? undefined,
           windowDays: Number(url.searchParams.get("window") || 7) || 7,
+          viewerUserId: sessionUser?.id ?? null,
+        });
+        return json(
+          {
+            source: sourceParam,
+            date: url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10),
+            entries,
+          },
+          200,
+          cors,
+        );
+      }
+
+      if (path === "/v1/practice/victories" && request.method === "GET") {
+        const sourceParam = url.searchParams.get("source") || "daily";
+        if (sourceParam !== "daily" && sourceParam !== "random") {
+          return error("source must be daily or random", 400, cors);
+        }
+        const sessionUser = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+        );
+        const limit = Math.min(
+          100,
+          Math.max(1, Number(url.searchParams.get("limit") || 50) || 50),
+        );
+        const entries = await listRecentPracticeVictories(env.DB, {
+          source: sourceParam,
+          date: url.searchParams.get("date") ?? undefined,
+          windowDays: Number(url.searchParams.get("window") || 7) || 7,
+          limit,
           viewerUserId: sessionUser?.id ?? null,
         });
         return json(

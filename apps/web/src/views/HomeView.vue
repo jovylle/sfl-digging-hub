@@ -58,7 +58,7 @@ onMounted(async () => {
       <RouterLink to="/practice" class="card bg-base-200 hover:shadow-lg transition-shadow">
         <div class="card-body">
           <h2 class="card-title text-lg">Practice</h2>
-          <p class="text-sm text-base-content/70">Leaderboards from d1g.uk practice mode</p>
+          <p class="text-sm text-base-content/70">Victory list and leaderboards from d1g.uk practice</p>
         </div>
       </RouterLink>
     </div>
