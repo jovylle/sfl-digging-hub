@@ -11,12 +11,17 @@ export function isTestnetLandId(landId: string): boolean {
 
 export function hasTestnetQuery(
   query: Record<string, unknown> | undefined | null,
+  searchOrFullPath = "",
 ): boolean {
-  if (!query) return false;
-  const v = query[TESTNET_QUERY];
-  if (v === undefined || v === null) return false;
-  if (v === "" || v === "1" || v === "true") return true;
-  return String(v).toLowerCase() === "true";
+  if (query && Object.prototype.hasOwnProperty.call(query, TESTNET_QUERY)) {
+    const v = query[TESTNET_QUERY];
+    if (v === null || v === undefined || v === "" || v === "1" || v === "true") {
+      return true;
+    }
+    return String(v).toLowerCase() === "true";
+  }
+  const s = String(searchOrFullPath || "");
+  return /[?&]testnet(?=$|[=&])/.test(s);
 }
 
 export function testnetLandHubMessage(landId?: string): string {

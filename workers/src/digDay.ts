@@ -15,6 +15,7 @@ export type DigDayPayload = {
   v?: number;
   landId: string;
   utcDate: string;
+  displayName?: string | null;
   patterns?: unknown[];
   digs: DigEntry[];
   markEvents?: MarkEvent[];
@@ -105,6 +106,7 @@ export function mergeDigDay(
     v: 1,
     landId,
     utcDate,
+    displayName: incoming.displayName?.trim() || base.displayName || null,
     patterns: replaceDigs
       ? [...(incoming.patterns || [])]
       : [...(base.patterns || [])],
@@ -134,6 +136,7 @@ export function rowToDigDay(row: SnapshotRow): DigDayPayload {
     v: 1,
     landId: row.land_id || "",
     utcDate: row.utc_date,
+    displayName: row.display_name,
     patterns: JSON.parse(row.patterns_json),
     digs: JSON.parse(row.digs_json) as DigEntry[],
     markEvents,
@@ -177,10 +180,14 @@ export function validateDigDayBody(body: unknown): DigDayPayload | string {
   const utcDate = parseUTCDate(b.utcDate);
   if (!Array.isArray(b.digs)) return "digs must be an array";
 
+  const displayName =
+    typeof b.displayName === "string" ? b.displayName.trim().slice(0, 64) : null;
+
   return {
     v: 1,
     landId,
     utcDate,
+    displayName: displayName || null,
     patterns: Array.isArray(b.patterns) ? b.patterns : [],
     digs: b.digs as DigEntry[],
     markEvents: Array.isArray(b.markEvents) ? (b.markEvents as MarkEvent[]) : [],
@@ -206,15 +213,21 @@ export async function saveDigDay(
   const now = merged.updatedAt || new Date().toISOString();
   const id = existingRow?.id ?? randomId();
 
+  const displayName =
+    merged.displayName?.trim().slice(0, 64) ||
+    existingRow?.display_name ||
+    null;
+
   await db
     .prepare(
       `INSERT INTO snapshots (
         id, utc_date, land_id, land_id_hash, display_name, patterns_json, digs_json,
         stats_json, marks_json, mark_events_json, visibility, screenshot_key,
         edit_token_hash, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, NULL, ?, 'public', NULL, NULL, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'public', NULL, NULL, ?, ?)
       ON CONFLICT(land_id_hash, utc_date) DO UPDATE SET
         land_id = excluded.land_id,
+        display_name = COALESCE(excluded.display_name, snapshots.display_name),
         patterns_json = excluded.patterns_json,
         digs_json = excluded.digs_json,
         stats_json = excluded.stats_json,
@@ -227,6 +240,7 @@ export async function saveDigDay(
       merged.utcDate,
       merged.landId,
       landHash,
+      displayName,
       JSON.stringify(merged.patterns ?? []),
       JSON.stringify(merged.digs),
       JSON.stringify(merged.stats ?? {}),

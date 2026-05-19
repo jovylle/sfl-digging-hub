@@ -96,22 +96,21 @@ function logout() {
 
 <template>
   <div class="text-sm space-y-2">
-    <p v-if="email" class="text-stone-400">
-      Signed in as <span class="text-amber-300">{{ email }}</span>
-      <button type="button" class="ml-2 underline text-stone-500" @click="logout">
+    <p v-if="email" class="text-base-content/70">
+      Signed in as <span class="font-medium text-primary">{{ email }}</span>
+      <button type="button" class="btn btn-ghost btn-xs ml-1" @click="logout">
         Sign out
       </button>
     </p>
     <template v-else>
-      <p v-if="!clientId" class="text-stone-500 text-xs">
+      <p v-if="!clientId" class="text-base-content/50 text-xs">
         Google sign-in not configured (VITE_GOOGLE_CLIENT_ID).
       </p>
       <div v-show="clientId" id="google-signin-btn" />
-      <p v-if="!ready && clientId" class="text-stone-500 text-xs">Loading Google sign-in…</p>
+      <p v-if="!ready && clientId" class="text-base-content/50 text-xs">
+        Loading Google sign-in…
+      </p>
     </template>
-    <p v-if="error" class="text-red-400 text-xs">{{ error }}</p>
-    <p class="text-stone-500 text-xs">
-      Sign in with Google (email only) to attach comments to your account.
-    </p>
+    <p v-if="error" class="text-error text-xs">{{ error }}</p>
   </div>
 </template>

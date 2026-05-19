@@ -50,38 +50,39 @@ onMounted(() => {
 
 <template>
   <section class="space-y-6 max-w-xl">
-    <h1 class="text-2xl font-bold text-amber-400">Journal</h1>
-    <p class="text-stone-400 text-sm">
-      Public dig history by land ID — same data synced from d1g.uk.
-    </p>
+    <div>
+      <h1 class="text-2xl font-bold text-primary">Journal</h1>
+      <p class="text-base-content/70 text-sm mt-1">
+        Public dig history by land ID — same data synced from d1g.uk.
+      </p>
+    </div>
 
     <form class="space-y-3" @submit.prevent="loadJournal">
-      <label class="block text-sm">
-        <span class="text-stone-400">Land ID</span>
+      <label class="form-control w-full">
+        <span class="label-text">Land ID</span>
         <input
           v-model="landId"
           type="text"
-          class="mt-1 w-full bg-stone-900 border border-stone-700 rounded px-3 py-2"
+          class="input input-bordered w-full"
           placeholder="e.g. 12345 (mainnet; testnet uses ?testnet on d1g.uk)"
         />
       </label>
-      <button
-        type="submit"
-        class="px-4 py-2 rounded bg-amber-600 hover:bg-amber-500 text-stone-950 text-sm font-medium"
-        :disabled="loading"
-      >
+      <button type="submit" class="btn btn-primary" :disabled="loading">
+        <span v-if="loading" class="loading loading-spinner loading-xs" />
         {{ loading ? "Loading…" : "Load digs" }}
       </button>
     </form>
 
-    <p v-if="error" class="text-red-400 text-sm">{{ error }}</p>
+    <div v-if="error" class="alert alert-error text-sm">
+      <span>{{ error }}</span>
+    </div>
     <p
       v-if="landId.trim() && isTestnetLandId(landId.trim())"
-      class="text-amber-400/90 text-sm"
+      class="text-warning text-sm"
     >
       <a
         :href="buildD1gLandUrl(landId.trim(), 'digging', { testnet: true })"
-        class="underline"
+        class="link link-primary"
         target="_blank"
         rel="noopener noreferrer"
       >
@@ -90,23 +91,23 @@ onMounted(() => {
     </p>
 
     <ul v-if="days.length" class="space-y-2">
-      <li
-        v-for="d in days"
-        :key="d.id"
-        class="flex items-center justify-between gap-4 rounded-lg border border-stone-800 bg-stone-900 px-4 py-3"
-      >
-        <div>
-          <p class="font-medium">{{ d.utcDate }}</p>
-          <p class="text-stone-500 text-sm">{{ d.digCount }} digs</p>
+      <li v-for="d in days" :key="d.id" class="card bg-base-200">
+        <div class="card-body py-4 flex-row items-center justify-between gap-4">
+          <div>
+            <p class="font-semibold">{{ d.utcDate }}</p>
+            <p class="text-sm text-base-content/60">{{ d.digCount }} digs</p>
+          </div>
+          <RouterLink
+            :to="{ name: 'replay', params: { id: d.id } }"
+            class="btn btn-secondary btn-sm shrink-0"
+          >
+            Replay
+          </RouterLink>
         </div>
-        <RouterLink
-          :to="{ name: 'replay', params: { id: d.id } }"
-          class="text-amber-400 text-sm hover:underline shrink-0"
-        >
-          Replay
-        </RouterLink>
       </li>
     </ul>
-    <p v-else-if="!loading && !error" class="text-stone-500 text-sm">No saved digs for this land yet.</p>
+    <p v-else-if="!loading && !error" class="text-base-content/50 text-sm">
+      No saved digs for this land yet.
+    </p>
   </section>
 </template>

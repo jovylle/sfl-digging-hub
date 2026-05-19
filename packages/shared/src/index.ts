@@ -1,4 +1,5 @@
 export * from "./testnet";
+export * from "./practice";
 
 export type Visibility = "private" | "unlisted" | "public";
 

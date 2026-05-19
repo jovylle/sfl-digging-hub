@@ -1,4 +1,9 @@
-import type { SnapshotPublic } from "@sfl-digging-hub/shared";
+import type {
+  PracticeLeaderboardEntry,
+  PracticePatternSource,
+  PracticeRunPayload,
+  SnapshotPublic,
+} from "@sfl-digging-hub/shared";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -17,6 +22,7 @@ export type CommunityItem = {
   landId: string | null;
   displayName: string | null;
   digCount: number;
+  commentCount: number;
   stats: Record<string, unknown>;
   createdAt: string;
   replayUrl: string;
@@ -136,4 +142,32 @@ export function signInWithGoogle(idToken: string): Promise<{
 
 export function signOut(): void {
   setSessionToken(null);
+}
+
+export function submitPracticeRun(
+  body: Omit<PracticeRunPayload, "anonymousId">,
+): Promise<PracticeLeaderboardEntry> {
+  return request("/v1/practice/runs", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({
+      ...body,
+      anonymousId: getAnonymousId(),
+    }),
+  });
+}
+
+export function getPracticeLeaderboard(options: {
+  source: PracticePatternSource;
+  date?: string;
+}): Promise<{
+  source: PracticePatternSource;
+  date: string;
+  entries: PracticeLeaderboardEntry[];
+}> {
+  const params = new URLSearchParams({ source: options.source });
+  if (options.source === "daily" && options.date) {
+    params.set("date", options.date);
+  }
+  return request(`/v1/practice/leaderboard?${params.toString()}`);
 }

@@ -60,32 +60,16 @@ function togglePlay() {
 
 <template>
   <div class="flex flex-wrap items-center gap-3 justify-center">
-    <button
-      type="button"
-      class="px-3 py-1.5 rounded bg-stone-800 hover:bg-stone-700 text-sm"
-      @click="stepBack"
-    >
-      Step back
-    </button>
-    <button
-      type="button"
-      class="px-4 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-stone-950 text-sm font-medium"
-      @click="togglePlay"
-    >
+    <button type="button" class="btn btn-sm btn-ghost" @click="stepBack">Step back</button>
+    <button type="button" class="btn btn-sm btn-primary" @click="togglePlay">
       {{ playing ? "Pause" : "Play" }}
     </button>
-    <button
-      type="button"
-      class="px-3 py-1.5 rounded bg-stone-800 hover:bg-stone-700 text-sm"
-      @click="stepForward"
-    >
-      Step forward
-    </button>
-    <label class="flex items-center gap-2 text-sm text-stone-400">
+    <button type="button" class="btn btn-sm btn-ghost" @click="stepForward">Step forward</button>
+    <label class="flex items-center gap-2 text-sm text-base-content/70">
       Speed
       <select
         :value="speed"
-        class="bg-stone-800 border border-stone-700 rounded px-2 py-1"
+        class="select select-bordered select-sm"
         @change="emit('update:speed', Number(($event.target as HTMLSelectElement).value))"
       >
         <option :value="0.5">0.5×</option>
@@ -94,7 +78,7 @@ function togglePlay() {
         <option :value="4">4×</option>
       </select>
     </label>
-    <span class="text-sm text-stone-500 w-full text-center">
+    <span class="text-sm text-base-content/50 w-full text-center">
       Dig {{ step + 1 }} / {{ maxStep + 1 }}
     </span>
   </div>

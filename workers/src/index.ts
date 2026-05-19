@@ -25,6 +25,11 @@ import {
   verifyWriteSecret,
 } from "./digDay";
 import {
+  listPracticeLeaderboard,
+  savePracticeRun,
+  validatePracticeRunBody,
+} from "./practice";
+import {
   createSnapshot,
   getSnapshotById,
   hashLandId,
@@ -247,13 +252,19 @@ export default {
 
       if (path === "/v1/community" && request.method === "GET") {
         const date = url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
+        const limit = Math.min(
+          100,
+          Math.max(1, Number(url.searchParams.get("limit") || 50) || 50),
+        );
         const rows = await env.DB
           .prepare(
-            `SELECT id, utc_date, land_id, display_name, visibility, created_at, digs_json, stats_json
-             FROM snapshots WHERE visibility = 'public' AND utc_date = ?
-             ORDER BY created_at DESC LIMIT 50`,
+            `SELECT s.id, s.utc_date, s.land_id, s.display_name, s.created_at, s.digs_json, s.stats_json,
+              (SELECT COUNT(*) FROM comments c WHERE c.snapshot_id = s.id) AS comment_count
+             FROM snapshots s
+             WHERE s.visibility = 'public' AND s.utc_date = ?
+             ORDER BY s.created_at DESC LIMIT ?`,
           )
-          .bind(date)
+          .bind(date, limit)
           .all<{
             id: string;
             utc_date: string;
@@ -262,6 +273,7 @@ export default {
             created_at: string;
             digs_json: string;
             stats_json: string;
+            comment_count: number;
           }>();
 
         const feed = (rows.results ?? []).map((r) => {
@@ -273,12 +285,54 @@ export default {
             landId: r.land_id,
             displayName: r.display_name,
             digCount: Array.isArray(digs) ? digs.length : 0,
+            commentCount: Number(r.comment_count) || 0,
             stats,
             createdAt: r.created_at,
             replayUrl: `${hubBase.replace(/\/$/, "")}/replay/${r.id}`,
           };
         });
         return json({ date, items: feed }, 200, cors);
+      }
+
+      if (path === "/v1/practice/runs" && request.method === "POST") {
+        const raw = await request.json().catch(() => null);
+        const validated = validatePracticeRunBody(raw);
+        if (typeof validated === "string") return error(validated, 400, cors);
+
+        const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+        const ipHash = await sha256Hex(`practice:${ip}`);
+        if (!(await checkCommentRate(env.DB, ipHash))) {
+          return error("Rate limit exceeded", 429, cors);
+        }
+
+        const saved = await savePracticeRun(env.DB, validated, request);
+        return json(saved, 201, cors);
+      }
+
+      if (path === "/v1/practice/leaderboard" && request.method === "GET") {
+        const sourceParam = url.searchParams.get("source") || "daily";
+        if (sourceParam !== "daily" && sourceParam !== "random") {
+          return error("source must be daily or random", 400, cors);
+        }
+        const sessionUser = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+        );
+        const entries = await listPracticeLeaderboard(env.DB, {
+          source: sourceParam,
+          date: url.searchParams.get("date") ?? undefined,
+          windowDays: Number(url.searchParams.get("window") || 7) || 7,
+          viewerUserId: sessionUser?.id ?? null,
+        });
+        return json(
+          {
+            source: sourceParam,
+            date: url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10),
+            entries,
+          },
+          200,
+          cors,
+        );
       }
 
       const snapshotMatch = path.match(/^\/v1\/snapshots\/([^/]+)$/);

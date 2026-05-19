@@ -70,14 +70,18 @@ watch(() => props.id, load);
 </script>
 
 <template>
-  <section v-if="error" class="text-red-400">{{ error }}</section>
-  <section v-else-if="!snapshot" class="text-stone-400">Loading replay…</section>
+  <section v-if="error && !snapshot" class="alert alert-error">
+    <span>{{ error }}</span>
+  </section>
+  <section v-else-if="!snapshot" class="flex justify-center py-12">
+    <span class="loading loading-spinner loading-lg text-primary" />
+  </section>
   <section v-else class="space-y-8">
     <header class="space-y-1">
-      <h1 class="text-2xl font-bold text-amber-400">
+      <h1 class="text-2xl font-bold text-primary">
         {{ snapshot.displayName || "Desert dig" }}
       </h1>
-      <p class="text-stone-400 text-sm">
+      <p class="text-base-content/70 text-sm">
         {{ snapshot.utcDate }} · {{ snapshot.digs.length }} digs
       </p>
     </header>
@@ -91,67 +95,69 @@ watch(() => props.id, load);
       :max-step="maxStep"
     />
 
-    <div
-      v-if="currentDig"
-      class="rounded-lg border border-stone-800 bg-stone-900/50 p-4 text-sm space-y-2"
-    >
-      <p class="font-medium text-amber-300">Dig #{{ currentDig.order }}</p>
-      <ul class="text-stone-400">
-        <li v-for="(tile, i) in currentDig.tiles" :key="i">
-          ({{ tile.x }}, {{ tile.y }}) · {{ tile.tool }}
-          <span v-if="Object.keys(tile.items).length">
-            — {{ JSON.stringify(tile.items) }}
-          </span>
-        </li>
-      </ul>
+    <div v-if="currentDig" class="card bg-base-200 text-sm">
+      <div class="card-body py-4 space-y-2">
+        <p class="font-medium text-primary">Dig #{{ currentDig.order }}</p>
+        <ul class="text-base-content/70">
+          <li v-for="(tile, i) in currentDig.tiles" :key="i">
+            ({{ tile.x }}, {{ tile.y }}) · {{ tile.tool }}
+            <span v-if="Object.keys(tile.items).length">
+              — {{ JSON.stringify(tile.items) }}
+            </span>
+          </li>
+        </ul>
+      </div>
     </div>
 
-    <div class="border-t border-stone-800 pt-6 space-y-4">
-      <h2 class="font-semibold">Comments</h2>
+    <div class="divider">Comments</div>
+
+    <div class="space-y-4">
       <GoogleSignIn @signed-in="onSignedIn" />
+      <p class="text-xs text-base-content/60">
+        Sign in with Google to verify your comments. You can still post anonymously.
+      </p>
+
       <ul v-if="comments.length" class="space-y-3 text-sm">
-        <li
-          v-for="c in comments"
-          :key="c.id"
-          class="rounded bg-stone-900 border border-stone-800 p-3"
-        >
-          <span class="font-medium text-amber-300">{{ c.displayName }}</span>
-          <span v-if="c.owned" class="text-stone-600 text-xs ml-1">· verified</span>
-          <span v-if="c.digRef != null" class="text-stone-500"> · dig #{{ c.digRef }}</span>
-          <p class="text-stone-300 mt-1">{{ c.body }}</p>
+        <li v-for="c in comments" :key="c.id" class="card bg-base-200">
+          <div class="card-body py-3">
+            <p>
+              <span class="font-medium text-primary">{{ c.displayName }}</span>
+              <span v-if="c.owned" class="badge badge-success badge-xs ml-1">verified</span>
+              <span v-if="c.digRef != null" class="text-base-content/50">
+                · dig #{{ c.digRef }}
+              </span>
+            </p>
+            <p class="text-base-content/80 mt-1">{{ c.body }}</p>
+          </div>
         </li>
       </ul>
-      <p v-else class="text-stone-500 text-sm">No comments yet.</p>
+      <p v-else class="text-base-content/50 text-sm">No comments yet.</p>
 
-      <form class="space-y-2 max-w-md" @submit.prevent="submitComment">
+      <form class="space-y-3 max-w-md" @submit.prevent="submitComment">
         <input
           v-model="commentName"
           type="text"
           placeholder="Nickname"
           maxlength="32"
-          class="w-full bg-stone-900 border border-stone-700 rounded px-3 py-2 text-sm"
+          class="input input-bordered w-full input-sm"
         />
         <textarea
           v-model="commentBody"
           placeholder="Comment…"
           maxlength="500"
           rows="2"
-          class="w-full bg-stone-900 border border-stone-700 rounded px-3 py-2 text-sm"
+          class="textarea textarea-bordered w-full textarea-sm"
         />
         <input
           v-model.number="commentDigRef"
           type="number"
           min="1"
           placeholder="Dig # (optional)"
-          class="w-full bg-stone-900 border border-stone-700 rounded px-3 py-2 text-sm"
+          class="input input-bordered w-full input-sm"
         />
-        <button
-          type="submit"
-          class="px-4 py-2 rounded bg-amber-600 hover:bg-amber-500 text-stone-950 text-sm font-medium"
-        >
-          Post comment
-        </button>
+        <button type="submit" class="btn btn-primary btn-sm">Post comment</button>
       </form>
+      <p v-if="error && snapshot" class="text-error text-sm">{{ error }}</p>
     </div>
   </section>
 </template>

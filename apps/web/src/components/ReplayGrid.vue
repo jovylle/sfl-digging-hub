@@ -29,9 +29,9 @@ const visibleOrders = computed(() => {
 
 function cellClass(index: number): string {
   const order = orderMap.value[index];
-  if (order == null) return "bg-stone-800/60 border-stone-700";
-  if (!visibleOrders.value.has(order)) return "bg-stone-800/60 border-stone-700";
-  return "bg-amber-900/70 border-amber-600/50";
+  if (order == null) return "bg-base-300 border-base-content/20";
+  if (!visibleOrders.value.has(order)) return "bg-base-300 border-base-content/20";
+  return "bg-primary/30 border-primary";
 }
 </script>
 
@@ -48,7 +48,7 @@ function cellClass(index: number): string {
     >
       <span
         v-if="order != null && visibleOrders.has(order)"
-        class="text-amber-200"
+        class="text-primary-content font-semibold"
       >
         {{ order }}
       </span>

@@ -3,35 +3,44 @@ import { RouterLink, RouterView } from "vue-router";
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col">
-    <header class="border-b border-stone-800 bg-stone-900/80 backdrop-blur sticky top-0 z-10">
-      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-        <RouterLink to="/" class="font-semibold text-amber-400 hover:text-amber-300">
+  <div
+    class="min-h-screen bg-base-200 bg-stripes text-base-content flex flex-col transition-colors duration-300"
+  >
+    <header class="navbar bg-base-100 shadow-sm sticky top-0 z-10 px-4">
+      <div class="flex-1">
+        <RouterLink to="/" class="btn btn-ghost text-lg font-bold px-2">
           SFL Digging Hub
         </RouterLink>
-        <nav class="flex gap-4 text-sm text-stone-300">
-          <RouterLink to="/community" class="hover:text-white" active-class="text-white">
-            Community
-          </RouterLink>
-          <RouterLink to="/journal" class="hover:text-white" active-class="text-white">
-            Journal
-          </RouterLink>
-          <a
-            href="https://d1g.uk"
-            class="hover:text-white"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Dig on d1g.uk
-          </a>
-        </nav>
       </div>
+      <nav class="flex-none gap-1">
+        <RouterLink to="/community" class="btn btn-ghost btn-sm" active-class="btn-active">
+          Community
+        </RouterLink>
+        <RouterLink to="/journal" class="btn btn-ghost btn-sm" active-class="btn-active">
+          Journal
+        </RouterLink>
+        <RouterLink to="/practice" class="btn btn-ghost btn-sm" active-class="btn-active">
+          Practice
+        </RouterLink>
+        <a
+          href="https://d1g.uk"
+          class="btn btn-ghost btn-sm"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Dig on d1g.uk
+        </a>
+      </nav>
     </header>
     <main class="flex-1 max-w-5xl w-full mx-auto px-4 py-8">
-      <RouterView />
+      <div class="bg-base-100 rounded-box shadow-md p-4 sm:p-6 min-h-[50vh]">
+        <RouterView />
+      </div>
     </main>
-    <footer class="border-t border-stone-800 text-center text-xs text-stone-500 py-6">
-      Dig on d1g.uk · Stories on the hub
+    <footer class="footer footer-center text-base-content/60 text-xs py-6">
+      <aside>
+        <p>Dig on d1g.uk · Stories and practice scores on the hub</p>
+      </aside>
     </footer>
   </div>
 </template>

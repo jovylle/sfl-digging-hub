@@ -28,41 +28,44 @@ watch(date, load);
 
 <template>
   <section class="space-y-6">
-    <h1 class="text-2xl font-bold text-amber-400">Community</h1>
-    <p class="text-stone-400 text-sm">Public digs shared for a UTC day.</p>
+    <div>
+      <h1 class="text-2xl font-bold text-primary">Community</h1>
+      <p class="text-base-content/70 text-sm mt-1">Public digs shared for a UTC day.</p>
+    </div>
 
-    <label class="flex items-center gap-3 text-sm">
-      <span class="text-stone-400">Date</span>
-      <input
-        v-model="date"
-        type="date"
-        class="bg-stone-900 border border-stone-700 rounded px-3 py-1.5"
-      />
+    <label class="form-control w-full max-w-xs">
+      <span class="label-text">Date (UTC)</span>
+      <input v-model="date" type="date" class="input input-bordered w-full" />
     </label>
 
-    <p v-if="loading" class="text-stone-500">Loading…</p>
-    <p v-else-if="error" class="text-red-400">{{ error }}</p>
+    <div v-if="loading" class="flex justify-center py-8">
+      <span class="loading loading-spinner loading-md text-primary" />
+    </div>
+    <div v-else-if="error" class="alert alert-error text-sm">
+      <span>{{ error }}</span>
+    </div>
 
     <ul v-else-if="items.length" class="space-y-3">
-      <li
-        v-for="item in items"
-        :key="item.id"
-        class="flex items-center justify-between gap-4 rounded-lg border border-stone-800 bg-stone-900 px-4 py-3"
-      >
-        <div>
-          <p class="font-medium">
-            {{ item.displayName || (item.landId ? `Land ${item.landId}` : "Desert dig") }}
-          </p>
-          <p class="text-stone-500 text-sm">{{ item.digCount }} digs</p>
+      <li v-for="item in items" :key="item.id" class="card bg-base-200">
+        <div class="card-body py-4 flex-row items-center justify-between gap-4">
+          <div class="min-w-0">
+            <p class="font-semibold truncate">
+              {{ item.displayName || (item.landId ? `Land ${item.landId}` : "Desert dig") }}
+            </p>
+            <p class="text-sm text-base-content/60">
+              {{ item.digCount }} digs
+              <span v-if="item.commentCount > 0"> · {{ item.commentCount }} comments</span>
+            </p>
+          </div>
+          <RouterLink
+            :to="{ name: 'replay', params: { id: item.id } }"
+            class="btn btn-primary btn-sm shrink-0"
+          >
+            Watch replay
+          </RouterLink>
         </div>
-        <RouterLink
-          :to="{ name: 'replay', params: { id: item.id } }"
-          class="text-amber-400 text-sm hover:underline shrink-0"
-        >
-          Watch replay
-        </RouterLink>
       </li>
     </ul>
-    <p v-else class="text-stone-500 text-sm">No public digs for this date.</p>
+    <p v-else class="text-base-content/50 text-sm">No public digs for this date.</p>
   </section>
 </template>

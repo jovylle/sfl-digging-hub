@@ -17,35 +17,49 @@ onMounted(async () => {
 
 <template>
   <section class="space-y-6">
-    <h1 class="text-3xl font-bold text-amber-400">SFL Digging Hub</h1>
-    <p class="text-stone-300 text-lg max-w-2xl">
+    <h1 class="text-3xl font-bold text-primary">SFL Digging Hub</h1>
+    <p class="text-base-content/80 text-lg max-w-2xl">
       Save, replay, and share desert digs when the game API only shows today.
       Dig on
-      <a href="https://d1g.uk" class="text-amber-400 underline" target="_blank" rel="noopener"
+      <a
+        href="https://d1g.uk"
+        class="link link-primary"
+        target="_blank"
+        rel="noopener"
         >d1g.uk</a
       >
-      — open replays and community stories here.
+      — open replays, community stories, and practice leaderboards here.
     </p>
 
-    <p v-if="apiOk === true" class="text-emerald-400 text-sm">API connected</p>
-    <p v-else-if="apiOk === false" class="text-amber-600 text-sm">
-      API offline — run <code class="bg-stone-800 px-1 rounded">npm run dev:api</code> then refresh
-    </p>
+    <div v-if="apiOk === true" class="alert alert-success py-2 text-sm">
+      <span>API connected</span>
+    </div>
+    <div v-else-if="apiOk === false" class="alert alert-warning py-2 text-sm">
+      <span>
+        API offline — run
+        <code class="text-xs bg-base-200 px-1 rounded">npm run dev:api</code>
+        then refresh
+      </span>
+    </div>
 
-    <div class="grid sm:grid-cols-2 gap-4">
-      <RouterLink
-        to="/community"
-        class="block p-5 rounded-xl border border-stone-800 bg-stone-900 hover:border-amber-700/50 transition"
-      >
-        <h2 class="font-semibold text-lg mb-1">Community</h2>
-        <p class="text-stone-400 text-sm">Public digs by date</p>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <RouterLink to="/community" class="card bg-base-200 hover:shadow-lg transition-shadow">
+        <div class="card-body">
+          <h2 class="card-title text-lg">Community</h2>
+          <p class="text-sm text-base-content/70">Public digs by date</p>
+        </div>
       </RouterLink>
-      <RouterLink
-        to="/journal"
-        class="block p-5 rounded-xl border border-stone-800 bg-stone-900 hover:border-amber-700/50 transition"
-      >
-        <h2 class="font-semibold text-lg mb-1">Journal</h2>
-        <p class="text-stone-400 text-sm">Your saved days (land + edit token)</p>
+      <RouterLink to="/journal" class="card bg-base-200 hover:shadow-lg transition-shadow">
+        <div class="card-body">
+          <h2 class="card-title text-lg">Journal</h2>
+          <p class="text-sm text-base-content/70">Dig history by land ID</p>
+        </div>
+      </RouterLink>
+      <RouterLink to="/practice" class="card bg-base-200 hover:shadow-lg transition-shadow">
+        <div class="card-body">
+          <h2 class="card-title text-lg">Practice</h2>
+          <p class="text-sm text-base-content/70">Leaderboards from d1g.uk practice mode</p>
+        </div>
       </RouterLink>
     </div>
   </section>
