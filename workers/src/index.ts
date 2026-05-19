@@ -18,6 +18,7 @@ import {
   getDigDayRow,
   isValidLandId,
   listLandDays,
+  testnetLandError,
   rowToDigDayWithReplay,
   saveDigDay,
   validateDigDayBody,
@@ -110,6 +111,8 @@ export default {
         const utcDate =
           url.searchParams.get("utcDate") ||
           new Date().toISOString().slice(0, 10);
+        const testnetErr = testnetLandError(landId);
+        if (testnetErr) return error(testnetErr, 400, cors);
         if (!isValidLandId(landId)) {
           return error("Invalid landId", 400, cors);
         }
@@ -146,6 +149,8 @@ export default {
       const landDaysMatch = path.match(/^\/v1\/lands\/(\d+)\/days$/);
       if (landDaysMatch && request.method === "GET") {
         const landId = landDaysMatch[1];
+        const testnetErrDays = testnetLandError(landId);
+        if (testnetErrDays) return error(testnetErrDays, 400, cors);
         if (!isValidLandId(landId)) {
           return error("Invalid landId", 400, cors);
         }

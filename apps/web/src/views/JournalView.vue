@@ -7,6 +7,7 @@ import {
   saveJournalLandId,
   type LandDayItem,
 } from "@/api/client";
+import { buildD1gLandUrl, isTestnetLandId, testnetLandHubMessage } from "@/utils/testnet";
 
 const landId = ref("");
 const days = ref<LandDayItem[]>([]);
@@ -14,15 +15,21 @@ const error = ref<string | null>(null);
 const loading = ref(false);
 
 async function loadJournal() {
-  if (!landId.value.trim()) {
+  const id = landId.value.trim();
+  if (!id) {
     error.value = "Land ID is required";
+    return;
+  }
+  if (isTestnetLandId(id)) {
+    error.value = testnetLandHubMessage(id);
+    days.value = [];
     return;
   }
   loading.value = true;
   error.value = null;
-  saveJournalLandId(landId.value.trim());
+  saveJournalLandId(id);
   try {
-    const res = await getLandDays(landId.value.trim());
+    const res = await getLandDays(id);
     days.value = res.days;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Failed to load journal";
@@ -55,7 +62,7 @@ onMounted(() => {
           v-model="landId"
           type="text"
           class="mt-1 w-full bg-stone-900 border border-stone-700 rounded px-3 py-2"
-          placeholder="e.g. from d1g.uk/land/…"
+          placeholder="e.g. 12345 (mainnet; testnet uses ?testnet on d1g.uk)"
         />
       </label>
       <button
@@ -68,6 +75,19 @@ onMounted(() => {
     </form>
 
     <p v-if="error" class="text-red-400 text-sm">{{ error }}</p>
+    <p
+      v-if="landId.trim() && isTestnetLandId(landId.trim())"
+      class="text-amber-400/90 text-sm"
+    >
+      <a
+        :href="buildD1gLandUrl(landId.trim(), 'digging', { testnet: true })"
+        class="underline"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Open on d1g.uk with ?testnet
+      </a>
+    </p>
 
     <ul v-if="days.length" class="space-y-2">
       <li

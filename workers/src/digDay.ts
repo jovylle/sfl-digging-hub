@@ -1,4 +1,5 @@
 import type { DigEntry } from "@sfl-digging-hub/shared";
+import { isTestnetLandId, testnetLandHubMessage } from "@sfl-digging-hub/shared";
 import { randomId } from "./crypto";
 import { hashLandId, type SnapshotRow } from "./snapshots";
 
@@ -38,6 +39,12 @@ export function isValidLandId(landId: string): boolean {
     typeof landId === "string" &&
     new RegExp(`^\\d{1,${LAND_ID_MAX_LEN}}$`).test(landId)
   );
+}
+
+/** Testnet farms are used on d1g.uk with ?testnet only — not stored on the hub. */
+export function testnetLandError(landId: string): string | null {
+  if (!isTestnetLandId(landId)) return null;
+  return testnetLandHubMessage(landId);
 }
 
 export function emptyDigDay(landId: string, utcDate: string): DigDayPayload {
@@ -164,6 +171,8 @@ export function validateDigDayBody(body: unknown): DigDayPayload | string {
   if (!body || typeof body !== "object") return "Invalid JSON body";
   const b = body as Record<string, unknown>;
   const landId = String(b.landId || "");
+  const testnetErr = testnetLandError(landId);
+  if (testnetErr) return testnetErr;
   if (!isValidLandId(landId)) return "Invalid landId";
   const utcDate = parseUTCDate(b.utcDate);
   if (!Array.isArray(b.digs)) return "digs must be an array";

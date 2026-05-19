@@ -1,3 +1,5 @@
+export * from "./testnet";
+
 export type Visibility = "private" | "unlisted" | "public";
 
 export type DigTool = "Sand Shovel" | "Sand Drill";
