@@ -30,8 +30,14 @@ export function parseUTCDate(value: unknown): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : getTodayUTC();
 }
 
+/** SFL farm IDs are numeric; api-dev test farms can exceed 12 digits (e.g. 913531074720548). */
+export const LAND_ID_MAX_LEN = 20;
+
 export function isValidLandId(landId: string): boolean {
-  return typeof landId === "string" && /^\d{1,12}$/.test(landId);
+  return (
+    typeof landId === "string" &&
+    new RegExp(`^\\d{1,${LAND_ID_MAX_LEN}}$`).test(landId)
+  );
 }
 
 export function emptyDigDay(landId: string, utcDate: string): DigDayPayload {

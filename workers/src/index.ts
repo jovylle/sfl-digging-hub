@@ -143,9 +143,12 @@ export default {
         }
       }
 
-      const landDaysMatch = path.match(/^\/v1\/lands\/(\d{1,12})\/days$/);
+      const landDaysMatch = path.match(/^\/v1\/lands\/(\d+)\/days$/);
       if (landDaysMatch && request.method === "GET") {
         const landId = landDaysMatch[1];
+        if (!isValidLandId(landId)) {
+          return error("Invalid landId", 400, cors);
+        }
         const days = await listLandDays(env.DB, landId);
         const base = hubBase.replace(/\/$/, "");
         return json(
