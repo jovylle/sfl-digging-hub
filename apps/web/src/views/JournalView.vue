@@ -98,10 +98,10 @@ onMounted(() => {
             <p class="text-sm text-base-content/60">{{ d.digCount }} digs</p>
           </div>
           <RouterLink
-            :to="{ name: 'replay', params: { id: d.id } }"
+            :to="{ name: 'dig', params: { id: d.id } }"
             class="btn btn-secondary btn-sm shrink-0"
           >
-            Replay
+            View dig
           </RouterLink>
         </div>
       </li>

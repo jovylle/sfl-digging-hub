@@ -75,15 +75,12 @@ export function getComments(snapshotId: string): Promise<{ comments: Comment[] }
 
 export function postComment(
   snapshotId: string,
-  body: { displayName: string; body: string; digRef?: number },
+  body: { body: string },
 ): Promise<Comment> {
   return request(`/v1/snapshots/${snapshotId}/comments`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({
-      ...body,
-      anonymousId: getAnonymousId(),
-    }),
+    body: JSON.stringify(body),
   });
 }
 

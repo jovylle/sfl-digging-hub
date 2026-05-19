@@ -154,7 +154,7 @@ export function rowToDigDayWithReplay(
   return {
     ...rowToDigDay(row),
     id: row.id,
-    replayUrl: `${base}/replay/${row.id}`,
+    replayUrl: `${base}/dig/${row.id}`,
   };
 }
 
@@ -257,7 +257,7 @@ export async function saveDigDay(
   return {
     ...merged,
     id: row.id,
-    replayUrl: `${base}/replay/${row.id}`,
+    replayUrl: `${base}/dig/${row.id}`,
   };
 }
 

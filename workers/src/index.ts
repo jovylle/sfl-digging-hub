@@ -167,7 +167,7 @@ export default {
             landId,
             days: days.map((d) => ({
               ...d,
-              replayUrl: `${base}/replay/${d.id}`,
+              replayUrl: `${base}/dig/${d.id}`,
             })),
           },
           200,
@@ -289,7 +289,7 @@ export default {
             commentCount: Number(r.comment_count) || 0,
             stats,
             createdAt: r.created_at,
-            replayUrl: `${hubBase.replace(/\/$/, "")}/replay/${r.id}`,
+            replayUrl: `${hubBase.replace(/\/$/, "")}/dig/${r.id}`,
           };
         });
         return json({ date, items: feed }, 200, cors);
@@ -451,13 +451,26 @@ export default {
           if (!canViewSnapshot(row) && row.visibility === "private") {
             return error("Cannot comment on private snapshot", 403, cors);
           }
-          const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-          if (!body || typeof body.displayName !== "string" || typeof body.body !== "string") {
-            return error("displayName and body required", 400, cors);
+
+          const sessionUser = await getUserFromSession(
+            env.DB,
+            sessionTokenFromRequest(request),
+          );
+          if (!sessionUser) {
+            return error("Sign in required to comment", 401, cors);
           }
-          const displayName = body.displayName.slice(0, 32);
+
+          const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+          if (!body || typeof body.body !== "string") {
+            return error("body required", 400, cors);
+          }
           const text = body.body.slice(0, 500);
           if (!text.trim()) return error("body required", 400, cors);
+
+          const displayName =
+            typeof body.displayName === "string" && body.displayName.trim()
+              ? body.displayName.trim().slice(0, 32)
+              : sessionUser.email.split("@")[0]?.slice(0, 32) || "Player";
 
           const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
           const ipHash = await sha256Hex(`ip:${ip}`);
@@ -465,14 +478,7 @@ export default {
             return error("Rate limit exceeded", 429, cors);
           }
 
-          const sessionUser = await getUserFromSession(
-            env.DB,
-            sessionTokenFromRequest(request),
-          );
-          const anonymousId =
-            typeof body.anonymousId === "string"
-              ? body.anonymousId.slice(0, 64)
-              : null;
+          const anonymousId = null;
           const digRef =
             typeof body.digRef === "number" && Number.isInteger(body.digRef)
               ? body.digRef
@@ -491,8 +497,8 @@ export default {
               text,
               digRef,
               createdAt,
-              sessionUser?.id ?? null,
-              sessionUser ? null : anonymousId,
+              sessionUser.id,
+              anonymousId,
             )
             .run();
 

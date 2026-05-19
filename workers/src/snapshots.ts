@@ -27,6 +27,7 @@ export type SnapshotRow = {
 };
 
 export function rowToPublic(row: SnapshotRow): SnapshotPublic {
+  const visibility = row.visibility;
   return {
     id: row.id,
     utcDate: row.utc_date,
@@ -34,8 +35,13 @@ export function rowToPublic(row: SnapshotRow): SnapshotPublic {
     patterns: JSON.parse(row.patterns_json),
     digs: JSON.parse(row.digs_json) as DigEntry[],
     stats: JSON.parse(row.stats_json) as SnapshotStats,
-    marks: row.marks_json ? JSON.parse(row.marks_json) : null,
-    visibility: row.visibility,
+    marks:
+      visibility === "public"
+        ? null
+        : row.marks_json
+          ? JSON.parse(row.marks_json)
+          : null,
+    visibility,
     screenshotKey: row.screenshot_key,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -130,7 +136,7 @@ export async function createSnapshot(
   return {
     ...pub,
     editToken,
-    replayUrl: `${base}/replay/${row.id}`,
+    replayUrl: `${base}/dig/${row.id}`,
   };
 }
 

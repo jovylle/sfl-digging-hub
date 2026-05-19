@@ -3,6 +3,11 @@ import { onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { getCommunity, type CommunityItem } from "@/api/client";
 
+function treasureCount(item: CommunityItem): number {
+  const n = item.stats?.treasureCount;
+  return typeof n === "number" ? n : 0;
+}
+
 const date = ref(new Date().toISOString().slice(0, 10));
 const items = ref<CommunityItem[]>([]);
 const error = ref<string | null>(null);
@@ -54,14 +59,15 @@ watch(date, load);
             </p>
             <p class="text-sm text-base-content/60">
               {{ item.digCount }} digs
+              <span v-if="treasureCount(item) > 0"> · {{ treasureCount(item) }} treasures</span>
               <span v-if="item.commentCount > 0"> · {{ item.commentCount }} comments</span>
             </p>
           </div>
           <RouterLink
-            :to="{ name: 'replay', params: { id: item.id } }"
+            :to="{ name: 'dig', params: { id: item.id } }"
             class="btn btn-primary btn-sm shrink-0"
           >
-            Watch replay
+            View dig
           </RouterLink>
         </div>
       </li>
