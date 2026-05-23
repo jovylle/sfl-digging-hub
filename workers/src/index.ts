@@ -39,6 +39,14 @@ import {
   verifyEditToken,
   type SnapshotRow,
 } from "./snapshots";
+import {
+  buildCommunityMeta,
+  buildHomeMeta,
+  buildSnapshotMeta,
+  handleSnapshotOgPng,
+  handleStaticOgPng,
+  injectOgIntoHtml,
+} from "./og";
 
 export interface Env {
   DB: D1Database;
@@ -46,6 +54,7 @@ export interface Env {
   ASSETS?: Fetcher;
   CORS_ORIGINS?: string;
   HUB_BASE_URL?: string;
+  API_BASE_URL?: string;
   HUB_WRITE_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
 }
@@ -71,6 +80,28 @@ function error(message: string, status: number, cors: HeadersInit): Response {
 
 function canViewSnapshot(row: SnapshotRow): boolean {
   return row.visibility === "public" || row.visibility === "unlisted";
+}
+
+async function metaForPath(
+  db: D1Database,
+  path: string,
+  hubBase: string,
+  apiBase: string,
+) {
+  if (path === "/" || path === "") {
+    return buildHomeMeta(hubBase, apiBase);
+  }
+  if (path === "/community" || path === "/community/") {
+    return buildCommunityMeta(hubBase, apiBase);
+  }
+  const digMatch = path.match(/^\/dig\/([^/]+)\/?$/);
+  if (digMatch) {
+    const row = await getSnapshotById(db, digMatch[1]);
+    if (row && canViewSnapshot(row)) {
+      return buildSnapshotMeta(row, hubBase, apiBase);
+    }
+  }
+  return null;
 }
 
 async function checkCommentRate(db: D1Database, ipHash: string): Promise<boolean> {
@@ -107,9 +138,24 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    const apiBase = env.API_BASE_URL ?? "http://localhost:8787";
+
     try {
       if (path === "/health" && request.method === "GET") {
         return json({ ok: true, service: "sfl-digging-hub-api" }, 200, cors);
+      }
+
+      const snapshotOgMatch = path.match(/^\/v1\/snapshots\/([^/]+)\/og\.png$/);
+      if (snapshotOgMatch && request.method === "GET") {
+        return handleSnapshotOgPng(env.DB, request, snapshotOgMatch[1], cors);
+      }
+
+      if (path === "/v1/og/home.png" && request.method === "GET") {
+        return handleStaticOgPng(request, "home", cors);
+      }
+
+      if (path === "/v1/og/community.png" && request.method === "GET") {
+        return handleStaticOgPng(request, "community", cors);
       }
 
       if (path === "/v1/dig-day" && request.method === "GET") {
@@ -549,6 +595,21 @@ export default {
         env.ASSETS &&
         (request.method === "GET" || request.method === "HEAD")
       ) {
+        const ogMeta = await metaForPath(env.DB, path, hubBase, apiBase);
+        if (ogMeta) {
+          const assetUrl = new URL(request.url);
+          assetUrl.pathname = "/";
+          const indexResponse = await env.ASSETS.fetch(
+            new Request(assetUrl.toString(), { method: "GET" }),
+          );
+          if (indexResponse.ok) {
+            const contentType = indexResponse.headers.get("content-type") ?? "";
+            if (contentType.includes("text/html")) {
+              return injectOgIntoHtml(indexResponse, { tags: ogMeta });
+            }
+          }
+          return indexResponse;
+        }
         return env.ASSETS.fetch(request);
       }
 

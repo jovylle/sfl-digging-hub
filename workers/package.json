@@ -15,7 +15,9 @@
     "cf:migrate:beta": "wrangler d1 migrations apply sfl-digging-hub-beta --remote --env beta"
   },
   "dependencies": {
-    "@sfl-digging-hub/shared": "*"
+    "@resvg/resvg-wasm": "^2.6.2",
+    "@sfl-digging-hub/shared": "*",
+    "satori": "^0.26.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250525.0",
