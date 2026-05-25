@@ -13,6 +13,8 @@ export type DigCellResult = {
   /** Treasure item name when kind is treasure. */
   label?: string;
   tool?: DigTool;
+  /** 1-based dig order for this tile (from timeline). */
+  order?: number;
 };
 
 export type DigLootSummary = {
@@ -50,6 +52,7 @@ export function buildDigResultsGrid(
       cells[idx] = {
         ...classifyTile(items),
         tool: tile.tool,
+        order: entry.order,
       };
     }
   }

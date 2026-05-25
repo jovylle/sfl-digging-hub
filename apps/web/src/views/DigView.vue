@@ -94,8 +94,11 @@ watch(() => props.id, load);
         {{ snapshot.displayName || "Desert dig" }}
       </h1>
       <p class="text-base-content/70 text-sm">
-        {{ snapshot.utcDate }} · {{ snapshot.digs.length }} digs ·
+        {{ snapshot.utcDate }} · day grid · {{ snapshot.digs.length }} digs ·
         {{ statsTreasures }} treasures
+      </p>
+      <p class="text-base-content/50 text-xs">
+        Each tile shows what was found and the dig order number — not a step-by-step replay.
       </p>
     </header>
 
