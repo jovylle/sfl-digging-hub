@@ -249,7 +249,16 @@ function toggleExpand(id: string) {
                       >{{ key }}</span>
                     </div>
                   </div>
-                  <span class="badge badge-primary badge-lg shrink-0">Victory</span>
+                  <div class="flex flex-col items-end gap-1 shrink-0">
+                    <span class="badge badge-primary badge-lg">Victory</span>
+                    <a
+                      :href="`${D1G_BASE_URL}/practice/run/${row.id}`"
+                      target="_blank"
+                      rel="noopener"
+                      class="link link-primary text-xs"
+                      @click.stop
+                    >View run →</a>
+                  </div>
                 </div>
               </div>
             </li>
@@ -311,6 +320,14 @@ function toggleExpand(id: string) {
                   <td>
                     {{ row.displayName || "Anonymous" }}
                     <span v-if="row.owned" class="badge badge-success badge-xs ml-1">you</span>
+                    <a
+                      :href="`${D1G_BASE_URL}/practice/run/${row.id}`"
+                      target="_blank"
+                      rel="noopener"
+                      class="link link-primary text-xs ml-1 opacity-50 hover:opacity-100"
+                      title="View run on d1g"
+                      @click.stop
+                    >↗</a>
                   </td>
                   <td class="font-mono text-xs">{{ formatPracticeScore(row.score) }}</td>
                   <td>{{ row.digCount }}</td>
