@@ -1,8 +1,11 @@
 import type {
   CreateSnapshotBody,
+  DigEntry,
+  ReactionEmoji,
   SnapshotPublic,
   Visibility,
 } from "@sfl-digging-hub/shared";
+import { isReactionEmoji } from "@sfl-digging-hub/shared";
 import {
   claimCommentsForUser,
   createSession,
@@ -298,47 +301,83 @@ export default {
       }
 
       if (path === "/v1/community" && request.method === "GET") {
-        const date = url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
         const limit = Math.min(
           100,
-          Math.max(1, Number(url.searchParams.get("limit") || 50) || 50),
+          Math.max(1, Number(url.searchParams.get("limit") || 30) || 30),
         );
-        const rows = await env.DB
-          .prepare(
-            `SELECT s.id, s.utc_date, s.land_id, s.display_name, s.created_at, s.digs_json, s.stats_json,
-              (SELECT COUNT(*) FROM comments c WHERE c.snapshot_id = s.id) AS comment_count
-             FROM snapshots s
-             WHERE s.visibility = 'public' AND s.utc_date = ?
-             ORDER BY s.created_at DESC LIMIT ?`,
-          )
-          .bind(date, limit)
-          .all<{
-            id: string;
-            utc_date: string;
-            land_id: string | null;
-            display_name: string | null;
-            created_at: string;
-            digs_json: string;
-            stats_json: string;
-            comment_count: number;
-          }>();
+        const before = url.searchParams.get("before");
+        const fetchCount = limit + 1;
+        const sessionUser = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+        );
+        const viewerId = sessionUser?.id ?? null;
 
-        const feed = (rows.results ?? []).map((r) => {
-          const digs = JSON.parse(r.digs_json) as { length: number };
+        const selectCols = `s.id, s.utc_date, s.land_id, s.display_name, s.created_at, s.digs_json, s.stats_json,
+              (SELECT COUNT(*) FROM comments c WHERE c.snapshot_id = s.id) AS comment_count,
+              (SELECT json_group_object(emoji, c) FROM (
+                 SELECT emoji, COUNT(*) AS c FROM dig_reactions WHERE snapshot_id = s.id GROUP BY emoji
+               )) AS reactions_json,
+              (SELECT emoji FROM dig_reactions WHERE snapshot_id = s.id AND user_id = ?) AS viewer_emoji`;
+        type Row = {
+          id: string;
+          utc_date: string;
+          land_id: string | null;
+          display_name: string | null;
+          created_at: string;
+          digs_json: string;
+          stats_json: string;
+          comment_count: number;
+          reactions_json: string | null;
+          viewer_emoji: string | null;
+        };
+        const rows = before
+          ? await env.DB
+              .prepare(
+                `SELECT ${selectCols}
+                 FROM snapshots s
+                 WHERE s.visibility = 'public' AND s.created_at < ?
+                 ORDER BY s.created_at DESC LIMIT ?`,
+              )
+              .bind(viewerId, before, fetchCount)
+              .all<Row>()
+          : await env.DB
+              .prepare(
+                `SELECT ${selectCols}
+                 FROM snapshots s
+                 WHERE s.visibility = 'public'
+                 ORDER BY s.created_at DESC LIMIT ?`,
+              )
+              .bind(viewerId, fetchCount)
+              .all<Row>();
+
+        const all = rows.results ?? [];
+        const hasMore = all.length > limit;
+        const page = hasMore ? all.slice(0, limit) : all;
+        const feed = page.map((r) => {
+          const digs = JSON.parse(r.digs_json) as DigEntry[] | unknown;
+          const digList: DigEntry[] = Array.isArray(digs) ? (digs as DigEntry[]) : [];
           const stats = JSON.parse(r.stats_json) as Record<string, unknown>;
+          const counts = r.reactions_json
+            ? (JSON.parse(r.reactions_json) as Record<string, number>)
+            : {};
+          const userEmoji = isReactionEmoji(r.viewer_emoji) ? r.viewer_emoji : null;
           return {
             id: r.id,
             utcDate: r.utc_date,
             landId: r.land_id,
             displayName: r.display_name,
-            digCount: Array.isArray(digs) ? digs.length : 0,
+            digs: digList,
+            digCount: digList.length,
             commentCount: Number(r.comment_count) || 0,
             stats,
             createdAt: r.created_at,
             replayUrl: `${hubBase.replace(/\/$/, "")}/dig/${r.id}`,
+            reactions: { counts, userEmoji },
           };
         });
-        return json({ date, items: feed }, 200, cors);
+        const nextCursor = hasMore ? feed[feed.length - 1].createdAt : null;
+        return json({ items: feed, nextCursor }, 200, cors);
       }
 
       if (path === "/v1/practice/runs" && request.method === "POST") {
@@ -393,20 +432,19 @@ export default {
         );
         const limit = Math.min(
           100,
-          Math.max(1, Number(url.searchParams.get("limit") || 50) || 50),
+          Math.max(1, Number(url.searchParams.get("limit") || 30) || 30),
         );
-        const entries = await listRecentPracticeVictories(env.DB, {
+        const { entries, nextCursor } = await listRecentPracticeVictories(env.DB, {
           source: sourceParam,
-          date: url.searchParams.get("date") ?? undefined,
-          windowDays: Number(url.searchParams.get("window") || 7) || 7,
+          before: url.searchParams.get("before"),
           limit,
           viewerUserId: sessionUser?.id ?? null,
         });
         return json(
           {
             source: sourceParam,
-            date: url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10),
             entries,
+            nextCursor,
           },
           200,
           cors,
@@ -454,6 +492,106 @@ export default {
 
           const updated = await getSnapshotById(env.DB, id);
           return json(rowToPublic(updated!), 200, cors);
+        }
+      }
+
+      const reactionsMatch = path.match(/^\/v1\/snapshots\/([^/]+)\/reactions$/);
+      if (reactionsMatch) {
+        const snapshotId = reactionsMatch[1];
+        const row = await getSnapshotById(env.DB, snapshotId);
+        if (!row) return error("Snapshot not found", 404, cors);
+        if (!canViewSnapshot(row) && row.visibility === "private") {
+          return error("Cannot react to private snapshot", 403, cors);
+        }
+
+        async function loadReactionState(
+          viewerUserId: string | null,
+        ): Promise<{ counts: Record<string, number>; userEmoji: ReactionEmoji | null }> {
+          const aggRow = await env.DB
+            .prepare(
+              `SELECT json_group_object(emoji, c) AS reactions_json FROM (
+                 SELECT emoji, COUNT(*) AS c FROM dig_reactions WHERE snapshot_id = ? GROUP BY emoji
+               )`,
+            )
+            .bind(snapshotId)
+            .first<{ reactions_json: string | null }>();
+          const counts = aggRow?.reactions_json
+            ? (JSON.parse(aggRow.reactions_json) as Record<string, number>)
+            : {};
+          let userEmoji: ReactionEmoji | null = null;
+          if (viewerUserId) {
+            const userRow = await env.DB
+              .prepare(
+                `SELECT emoji FROM dig_reactions WHERE snapshot_id = ? AND user_id = ?`,
+              )
+              .bind(snapshotId, viewerUserId)
+              .first<{ emoji: string }>();
+            userEmoji = isReactionEmoji(userRow?.emoji) ? userRow.emoji : null;
+          }
+          return { counts, userEmoji };
+        }
+
+        if (request.method === "GET") {
+          const sessionUser = await getUserFromSession(
+            env.DB,
+            sessionTokenFromRequest(request),
+          );
+          const state = await loadReactionState(sessionUser?.id ?? null);
+          return json(state, 200, cors);
+        }
+
+        if (request.method === "POST") {
+          const sessionUser = await getUserFromSession(
+            env.DB,
+            sessionTokenFromRequest(request),
+          );
+          if (!sessionUser) {
+            return error("Sign in required to react", 401, cors);
+          }
+
+          const body = (await request.json().catch(() => null)) as
+            | { emoji?: unknown }
+            | null;
+          const rawEmoji = body?.emoji ?? null;
+          if (rawEmoji !== null && !isReactionEmoji(rawEmoji)) {
+            return error("Invalid emoji", 400, cors);
+          }
+
+          const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+          const ipHash = await sha256Hex(`ip:${ip}`);
+          if (!(await checkCommentRate(env.DB, ipHash))) {
+            return error("Rate limit exceeded", 429, cors);
+          }
+
+          const existing = await env.DB
+            .prepare(
+              `SELECT emoji FROM dig_reactions WHERE snapshot_id = ? AND user_id = ?`,
+            )
+            .bind(snapshotId, sessionUser.id)
+            .first<{ emoji: string }>();
+
+          if (rawEmoji === null || existing?.emoji === rawEmoji) {
+            await env.DB
+              .prepare(
+                `DELETE FROM dig_reactions WHERE snapshot_id = ? AND user_id = ?`,
+              )
+              .bind(snapshotId, sessionUser.id)
+              .run();
+          } else {
+            await env.DB
+              .prepare(
+                `INSERT INTO dig_reactions (snapshot_id, user_id, emoji, created_at)
+                 VALUES (?, ?, ?, ?)
+                 ON CONFLICT(snapshot_id, user_id) DO UPDATE SET
+                   emoji = excluded.emoji,
+                   created_at = excluded.created_at`,
+              )
+              .bind(snapshotId, sessionUser.id, rawEmoji, new Date().toISOString())
+              .run();
+          }
+
+          const state = await loadReactionState(sessionUser.id);
+          return json(state, 200, cors);
         }
       }
 

@@ -4,7 +4,7 @@ import { RouterLink, RouterView } from "vue-router";
 
 <template>
   <div
-    class="min-h-screen bg-base-200 bg-stripes text-base-content flex flex-col transition-colors duration-300"
+    class="min-h-screen bg-base-200 bg-pattern text-base-content flex flex-col transition-colors duration-300"
   >
     <header class="navbar bg-base-100 shadow-sm sticky top-0 z-10 px-4">
       <div class="flex-1">

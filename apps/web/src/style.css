@@ -79,14 +79,12 @@
 
 @custom-variant dark (&:where([data-theme=dim], [data-theme=dim] *));
 
-.bg-stripes {
-  @apply bg-[length:40px_40px];
-  background-image: repeating-linear-gradient(
-    -45deg,
-    var(--color-base-100),
-    var(--color-base-100) 10px,
-    var(--color-base-200) 10px,
-    var(--color-base-200) 20px
+.bg-pattern {
+  @apply bg-[length:24px_24px];
+  background-image: radial-gradient(
+    circle,
+    var(--color-base-300) 1px,
+    transparent 1.5px
   );
 }
 

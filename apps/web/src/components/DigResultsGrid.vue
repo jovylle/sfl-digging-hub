@@ -3,9 +3,13 @@ import { computed } from "vue";
 import type { DigEntry } from "@sfl-digging-hub/shared";
 import { GRID_SIZE, buildDigResultsGrid, type DigCellResult } from "@sfl-digging-hub/shared";
 
-const props = defineProps<{
-  digs: DigEntry[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    digs: DigEntry[];
+    compact?: boolean;
+  }>(),
+  { compact: false },
+);
 
 const cells = computed(() => buildDigResultsGrid(props.digs));
 
@@ -51,17 +55,23 @@ function abbreviate(name: string): string {
 
 <template>
   <div
-    class="grid gap-1 w-full max-w-md mx-auto aspect-square"
+    class="grid w-full aspect-square"
+    :class="props.compact ? 'gap-px' : 'gap-1 max-w-md mx-auto'"
     :style="{ gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))` }"
   >
     <div
       v-for="(cell, index) in cells"
       :key="index"
-      class="relative aspect-square rounded border flex items-center justify-center text-[0.55rem] sm:text-xs font-semibold leading-tight text-center px-0.5"
-      :class="cellClass(cell)"
+      class="relative aspect-square flex items-center justify-center font-semibold leading-tight text-center"
+      :class="[
+        cellClass(cell),
+        props.compact
+          ? 'rounded-[2px] border-[0.5px]'
+          : 'rounded border text-[0.55rem] sm:text-xs px-0.5',
+      ]"
       :title="cell.label ?? cell.kind"
     >
-      <span v-if="cell.kind !== 'undug'">{{ cellLabel(cell) }}</span>
+      <span v-if="!props.compact && cell.kind !== 'undug'">{{ cellLabel(cell) }}</span>
     </div>
   </div>
 </template>

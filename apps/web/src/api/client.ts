@@ -1,7 +1,9 @@
 import type {
+  DigEntry,
   PracticeLeaderboardEntry,
   PracticePatternSource,
   PracticeRunPayload,
+  ReactionEmoji,
   SnapshotPublic,
 } from "@sfl-digging-hub/shared";
 
@@ -21,11 +23,16 @@ export type CommunityItem = {
   utcDate: string;
   landId: string | null;
   displayName: string | null;
+  digs: DigEntry[];
   digCount: number;
   commentCount: number;
   stats: Record<string, unknown>;
   createdAt: string;
   replayUrl: string;
+  reactions: {
+    counts: Record<string, number>;
+    userEmoji: ReactionEmoji | null;
+  };
 };
 
 export type LandDayItem = {
@@ -64,9 +71,15 @@ export function getLandDays(landId: string): Promise<{ landId: string; days: Lan
   return request(`/v1/lands/${encodeURIComponent(landId)}/days`);
 }
 
-export function getCommunity(date?: string): Promise<{ date: string; items: CommunityItem[] }> {
-  const q = date ? `?date=${encodeURIComponent(date)}` : "";
-  return request(`/v1/community${q}`);
+export function getCommunity(options: {
+  before?: string | null;
+  limit?: number;
+} = {}): Promise<{ items: CommunityItem[]; nextCursor: string | null }> {
+  const params = new URLSearchParams();
+  if (options.before) params.set("before", options.before);
+  if (options.limit) params.set("limit", String(options.limit));
+  const q = params.toString();
+  return request(`/v1/community${q ? `?${q}` : ""}`);
 }
 
 export function getComments(snapshotId: string): Promise<{ comments: Comment[] }> {
@@ -81,6 +94,17 @@ export function postComment(
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify(body),
+  });
+}
+
+export function reactToSnapshot(
+  snapshotId: string,
+  emoji: ReactionEmoji | null,
+): Promise<{ counts: Record<string, number>; userEmoji: ReactionEmoji | null }> {
+  return request(`/v1/snapshots/${snapshotId}/reactions`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ emoji }),
   });
 }
 
@@ -172,15 +196,15 @@ export function getPracticeLeaderboard(options: {
 /** Recent practice victories, newest first (like the community dig list). */
 export function getPracticeVictories(options: {
   source: PracticePatternSource;
-  date?: string;
+  before?: string | null;
+  limit?: number;
 }): Promise<{
   source: PracticePatternSource;
-  date: string;
   entries: PracticeLeaderboardEntry[];
+  nextCursor: string | null;
 }> {
   const params = new URLSearchParams({ source: options.source });
-  if (options.source === "daily" && options.date) {
-    params.set("date", options.date);
-  }
+  if (options.before) params.set("before", options.before);
+  if (options.limit) params.set("limit", String(options.limit));
   return request(`/v1/practice/victories?${params.toString()}`);
 }

@@ -2,19 +2,36 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { formatPracticeScore, type PracticeLeaderboardEntry } from "@sfl-digging-hub/shared";
 import { getPracticeLeaderboard, getPracticeVictories } from "@/api/client";
+import { formatDayLabel, groupByUtcDate } from "@/utils/dayGroup";
+
+const PAGE_SIZE = 30;
 
 const source = ref<"daily" | "random">("daily");
 const date = ref(new Date().toISOString().slice(0, 10));
 const view = ref<"leaderboard" | "victories">("victories");
+
 const leaderboard = ref<PracticeLeaderboardEntry[]>([]);
+const leaderboardLoading = ref(false);
+const leaderboardError = ref<string | null>(null);
+
 const victories = ref<PracticeLeaderboardEntry[]>([]);
-const loading = ref(false);
-const error = ref<string | null>(null);
+const victoriesCursor = ref<string | null>(null);
+const victoriesLoading = ref(false);
+const victoriesLoadingMore = ref(false);
+const victoriesError = ref<string | null>(null);
 
 const subtitle = computed(() =>
   source.value === "daily"
-    ? `Today's patterns · UTC ${date.value}`
-    : "Random rounds · last 7 days",
+    ? view.value === "leaderboard"
+      ? `Today's patterns · UTC ${date.value}`
+      : "All daily-pattern victories, newest first"
+    : view.value === "leaderboard"
+      ? "Random rounds · last 7 days"
+      : "All random-round victories, newest first",
+);
+
+const victoryGroups = computed(() =>
+  groupByUtcDate(victories.value, (row) => row.createdAt.slice(0, 10)),
 );
 
 function formatTime(iso: string): string {
@@ -35,31 +52,71 @@ function formatDuration(ms: number): string {
   return `${m}:${s}`;
 }
 
-async function load() {
-  loading.value = true;
-  error.value = null;
-  const opts = {
-    source: source.value,
-    date: source.value === "daily" ? date.value : undefined,
-  };
+async function loadLeaderboard() {
+  leaderboardLoading.value = true;
+  leaderboardError.value = null;
   try {
-    const [board, recent] = await Promise.all([
-      getPracticeLeaderboard(opts),
-      getPracticeVictories(opts),
-    ]);
+    const board = await getPracticeLeaderboard({
+      source: source.value,
+      date: source.value === "daily" ? date.value : undefined,
+    });
     leaderboard.value = board.entries;
-    victories.value = recent.entries;
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to load practice data";
+    leaderboardError.value = e instanceof Error ? e.message : "Failed to load leaderboard";
     leaderboard.value = [];
-    victories.value = [];
   } finally {
-    loading.value = false;
+    leaderboardLoading.value = false;
   }
 }
 
-onMounted(load);
-watch([source, date], load);
+async function loadVictories() {
+  victoriesLoading.value = true;
+  victoriesError.value = null;
+  try {
+    const res = await getPracticeVictories({ source: source.value, limit: PAGE_SIZE });
+    victories.value = res.entries;
+    victoriesCursor.value = res.nextCursor;
+  } catch (e) {
+    victoriesError.value = e instanceof Error ? e.message : "Failed to load victories";
+    victories.value = [];
+    victoriesCursor.value = null;
+  } finally {
+    victoriesLoading.value = false;
+  }
+}
+
+async function loadMoreVictories() {
+  if (!victoriesCursor.value || victoriesLoadingMore.value) return;
+  victoriesLoadingMore.value = true;
+  victoriesError.value = null;
+  try {
+    const res = await getPracticeVictories({
+      source: source.value,
+      before: victoriesCursor.value,
+      limit: PAGE_SIZE,
+    });
+    victories.value = victories.value.concat(res.entries);
+    victoriesCursor.value = res.nextCursor;
+  } catch (e) {
+    victoriesError.value = e instanceof Error ? e.message : "Failed to load more";
+  } finally {
+    victoriesLoadingMore.value = false;
+  }
+}
+
+onMounted(() => {
+  loadVictories();
+  loadLeaderboard();
+});
+
+watch(source, () => {
+  loadVictories();
+  loadLeaderboard();
+});
+
+watch(date, () => {
+  if (source.value === "daily") loadLeaderboard();
+});
 </script>
 
 <template>
@@ -94,7 +151,10 @@ watch([source, date], load);
           Random
         </button>
       </div>
-      <label v-if="source === 'daily'" class="form-control">
+      <label
+        v-if="view === 'leaderboard' && source === 'daily'"
+        class="form-control"
+      >
         <span class="label-text text-xs">UTC date</span>
         <input v-model="date" type="date" class="input input-bordered input-sm" />
       </label>
@@ -122,74 +182,109 @@ watch([source, date], load);
       </button>
     </div>
 
-    <div v-if="loading" class="flex justify-center py-8">
-      <span class="loading loading-spinner loading-md text-primary" />
-    </div>
-    <div v-else-if="error" class="alert alert-error text-sm">
-      <span>{{ error }}</span>
-    </div>
+    <template v-if="view === 'victories'">
+      <div v-if="victoriesLoading" class="flex justify-center py-8">
+        <span class="loading loading-spinner loading-md text-primary" />
+      </div>
+      <div v-else-if="victoriesError && !victories.length" class="alert alert-error text-sm">
+        <span>{{ victoriesError }}</span>
+      </div>
 
-    <template v-else-if="view === 'victories'">
-      <p class="text-xs text-base-content/50">
-        Every completed practice round (newest first), same idea as the community dig list.
-      </p>
-      <ul v-if="victories.length" class="space-y-3">
-        <li v-for="row in victories" :key="row.id" class="card bg-base-200">
-          <div class="card-body py-4 flex-row items-center justify-between gap-4">
-            <div class="min-w-0">
-              <p class="font-semibold truncate">
-                {{ row.displayName || "Anonymous" }}
-                <span v-if="row.owned" class="badge badge-success badge-xs ml-1">you</span>
-              </p>
-              <p class="text-sm text-base-content/60">
-                {{ formatTime(row.createdAt) }}
-                · {{ row.digCount }} digs · {{ formatDuration(row.durationMs) }}
-                · score {{ formatPracticeScore(row.score) }}
-              </p>
-              <p class="text-xs text-base-content/50 mt-0.5">
-                {{ row.treasureCount }} treasure{{ row.treasureCount !== 1 ? "s" : "" }}
-                · {{ source === "daily" ? "daily patterns" : "random round" }}
-              </p>
-            </div>
-            <span class="badge badge-primary badge-lg shrink-0">Victory</span>
+      <template v-else-if="victories.length">
+        <div v-for="group in victoryGroups" :key="group.day" class="space-y-3">
+          <div class="flex items-center gap-3">
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
+              {{ formatDayLabel(group.day) }}
+            </h2>
+            <div class="flex-1 h-px bg-base-300" />
+            <span class="text-xs text-base-content/40">{{ group.items.length }}</span>
           </div>
-        </li>
-      </ul>
+          <ul class="space-y-3">
+            <li v-for="row in group.items" :key="row.id" class="card bg-base-200">
+              <div class="card-body py-4 flex-row items-center justify-between gap-4">
+                <div class="min-w-0">
+                  <p class="font-semibold truncate">
+                    {{ row.displayName || "Anonymous" }}
+                    <span v-if="row.owned" class="badge badge-success badge-xs ml-1">you</span>
+                  </p>
+                  <p class="text-sm text-base-content/60">
+                    {{ formatTime(row.createdAt) }}
+                    · {{ row.digCount }} digs · {{ formatDuration(row.durationMs) }}
+                    · score {{ formatPracticeScore(row.score) }}
+                  </p>
+                  <p class="text-xs text-base-content/50 mt-0.5">
+                    {{ row.treasureCount }} treasure{{ row.treasureCount !== 1 ? "s" : "" }}
+                    · {{ source === "daily" ? "daily patterns" : "random round" }}
+                  </p>
+                </div>
+                <span class="badge badge-primary badge-lg shrink-0">Victory</span>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="victoriesError" class="alert alert-warning text-sm">
+          <span>{{ victoriesError }}</span>
+        </div>
+
+        <div class="flex justify-center pt-2">
+          <button
+            v-if="victoriesCursor"
+            type="button"
+            class="btn btn-outline btn-sm"
+            :disabled="victoriesLoadingMore"
+            @click="loadMoreVictories"
+          >
+            <span v-if="victoriesLoadingMore" class="loading loading-spinner loading-xs" />
+            {{ victoriesLoadingMore ? "Loading..." : "Load more" }}
+          </button>
+          <p v-else class="text-xs text-base-content/40">You've reached the end.</p>
+        </div>
+      </template>
+
       <p v-else class="text-base-content/50 text-sm">
         No victories yet for this filter. Win a round on d1g.uk practice (with Save score on).
       </p>
     </template>
 
     <template v-else>
-      <p class="text-xs text-base-content/50">Best scores only — ranked lowest first.</p>
-      <div v-if="leaderboard.length" class="overflow-x-auto">
-        <table class="table table-zebra table-sm">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Player</th>
-              <th>Score</th>
-              <th>Digs</th>
-              <th>Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(row, i) in leaderboard" :key="row.id">
-              <td>{{ i + 1 }}</td>
-              <td>
-                {{ row.displayName || "Anonymous" }}
-                <span v-if="row.owned" class="badge badge-success badge-xs ml-1">you</span>
-              </td>
-              <td class="font-mono text-xs">{{ formatPracticeScore(row.score) }}</td>
-              <td>{{ row.digCount }}</td>
-              <td class="font-mono text-xs">{{ formatDuration(row.durationMs) }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-if="leaderboardLoading" class="flex justify-center py-8">
+        <span class="loading loading-spinner loading-md text-primary" />
       </div>
-      <p v-else class="text-base-content/50 text-sm">
-        No ranked runs yet. Finish a practice round on d1g.uk to appear here.
-      </p>
+      <div v-else-if="leaderboardError" class="alert alert-error text-sm">
+        <span>{{ leaderboardError }}</span>
+      </div>
+      <template v-else>
+        <p class="text-xs text-base-content/50">Best scores only — ranked lowest first.</p>
+        <div v-if="leaderboard.length" class="overflow-x-auto">
+          <table class="table table-zebra table-sm">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Player</th>
+                <th>Score</th>
+                <th>Digs</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, i) in leaderboard" :key="row.id">
+                <td>{{ i + 1 }}</td>
+                <td>
+                  {{ row.displayName || "Anonymous" }}
+                  <span v-if="row.owned" class="badge badge-success badge-xs ml-1">you</span>
+                </td>
+                <td class="font-mono text-xs">{{ formatPracticeScore(row.score) }}</td>
+                <td>{{ row.digCount }}</td>
+                <td class="font-mono text-xs">{{ formatDuration(row.durationMs) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-else class="text-base-content/50 text-sm">
+          No ranked runs yet. Finish a practice round on d1g.uk to appear here.
+        </p>
+      </template>
     </template>
   </section>
 </template>

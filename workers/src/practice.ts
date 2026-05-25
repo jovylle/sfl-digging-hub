@@ -195,43 +195,44 @@ export async function listPracticeLeaderboard(
   return (rows.results ?? []).map((r) => rowToEntry(r, options.viewerUserId));
 }
 
-/** Chronological list of victorious runs (newest first), like the community dig feed. */
+/** Chronological page of victorious runs (newest first), with cursor pagination. */
 export async function listRecentPracticeVictories(
   db: D1Database,
   options: {
     source: PracticePatternSource;
-    date?: string;
-    windowDays?: number;
+    before?: string | null;
     limit?: number;
     viewerUserId?: string | null;
   },
-): Promise<PracticeLeaderboardEntry[]> {
-  const limit = Math.min(100, Math.max(1, options.limit ?? 50));
+): Promise<{ entries: PracticeLeaderboardEntry[]; nextCursor: string | null }> {
+  const limit = Math.min(100, Math.max(1, options.limit ?? 30));
+  const fetchCount = limit + 1;
+  const before = options.before ?? null;
 
-  if (options.source === "daily") {
-    const date = options.date ?? new Date().toISOString().slice(0, 10);
-    const rows = await db
-      .prepare(
-        `SELECT * FROM practice_runs
-         WHERE pattern_source = 'daily' AND pattern_date = ? AND victory = 1
-         ORDER BY created_at DESC
-         LIMIT ?`,
-      )
-      .bind(date, limit)
-      .all<PracticeRunRow>();
-    return (rows.results ?? []).map((r) => rowToEntry(r, options.viewerUserId));
-  }
+  const rows = before
+    ? await db
+        .prepare(
+          `SELECT * FROM practice_runs
+           WHERE pattern_source = ? AND victory = 1 AND created_at < ?
+           ORDER BY created_at DESC
+           LIMIT ?`,
+        )
+        .bind(options.source, before, fetchCount)
+        .all<PracticeRunRow>()
+    : await db
+        .prepare(
+          `SELECT * FROM practice_runs
+           WHERE pattern_source = ? AND victory = 1
+           ORDER BY created_at DESC
+           LIMIT ?`,
+        )
+        .bind(options.source, fetchCount)
+        .all<PracticeRunRow>();
 
-  const windowDays = options.windowDays ?? 7;
-  const since = new Date(Date.now() - windowDays * 86_400_000).toISOString();
-  const rows = await db
-    .prepare(
-      `SELECT * FROM practice_runs
-       WHERE pattern_source = 'random' AND created_at >= ? AND victory = 1
-       ORDER BY created_at DESC
-       LIMIT ?`,
-    )
-    .bind(since, limit)
-    .all<PracticeRunRow>();
-  return (rows.results ?? []).map((r) => rowToEntry(r, options.viewerUserId));
+  const all = rows.results ?? [];
+  const hasMore = all.length > limit;
+  const page = hasMore ? all.slice(0, limit) : all;
+  const entries = page.map((r) => rowToEntry(r, options.viewerUserId));
+  const nextCursor = hasMore ? entries[entries.length - 1].createdAt : null;
+  return { entries, nextCursor };
 }

@@ -1,6 +1,7 @@
 export * from "./testnet";
 export * from "./practice";
 export * from "./digResults";
+export * from "./reactions";
 
 export type Visibility = "private" | "unlisted" | "public";
 
