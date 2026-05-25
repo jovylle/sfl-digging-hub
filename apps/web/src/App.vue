@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { RouterLink, RouterView } from "vue-router";
-import { getDisplayName, getSession, getSessionToken, type SessionInfo } from "@/api/client";
+import { getAvatarUrl, getDisplayName, getSession, getSessionToken, type SessionInfo } from "@/api/client";
 
 const sessionInfo = ref<SessionInfo | null>(null);
 
@@ -52,20 +52,11 @@ onMounted(loadSession);
           active-class="btn-active"
           :title="sessionInfo.email"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-4 w-4 shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M5.121 17.804A7 7 0 1118.88 6.196M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-            />
-          </svg>
+          <img
+            :src="getAvatarUrl(sessionInfo.email)"
+            :alt="getDisplayName(sessionInfo)"
+            class="w-5 h-5 rounded-full shrink-0 bg-base-200"
+          />
           <span class="truncate">{{ getDisplayName(sessionInfo) }}</span>
         </RouterLink>
       </nav>

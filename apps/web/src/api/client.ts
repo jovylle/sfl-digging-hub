@@ -152,6 +152,10 @@ export function getDisplayName(session: SessionInfo): string {
   return session.nickname?.trim() || session.email.split("@")[0] || "Player";
 }
 
+export function getAvatarUrl(seed: string): string {
+  return `https://api.dicebear.com/9.x/adventurer-neutral/svg?seed=${encodeURIComponent(seed)}`;
+}
+
 export function getSession(): Promise<SessionInfo> {
   return request("/v1/auth/session", { headers: authHeaders() });
 }

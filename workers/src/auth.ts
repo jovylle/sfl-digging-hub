@@ -2,6 +2,25 @@ import { randomToken, sha256Hex } from "./crypto";
 
 const SESSION_DAYS = 30;
 
+const NICKNAME_ADJECTIVES = [
+  "Sandy", "Dusty", "Lucky", "Golden", "Swift", "Bold", "Rusty", "Wild",
+  "Sharp", "Brave", "Sunny", "Gritty", "Eager", "Steady", "Quick", "Mighty",
+  "Crafty", "Speedy", "Nimble", "Sturdy",
+];
+
+const NICKNAME_NOUNS = [
+  "Digger", "Miner", "Scout", "Finder", "Ranger", "Seeker", "Tracker",
+  "Rover", "Explorer", "Hunter", "Drifter", "Hauler", "Picker", "Delver",
+  "Wanderer", "Prospector", "Spelunker", "Raider", "Sifter", "Tunneler",
+];
+
+function generateNickname(): string {
+  const adj = NICKNAME_ADJECTIVES[Math.floor(Math.random() * NICKNAME_ADJECTIVES.length)];
+  const noun = NICKNAME_NOUNS[Math.floor(Math.random() * NICKNAME_NOUNS.length)];
+  const num = Math.floor(Math.random() * 900) + 100;
+  return `${adj}${noun}${num}`;
+}
+
 export type UserRow = {
   id: string;
   email: string;
@@ -46,12 +65,13 @@ export async function findOrCreateUser(
   if (existing) return existing;
 
   const id = crypto.randomUUID();
+  const nickname = generateNickname();
   const createdAt = new Date().toISOString();
   await db
-    .prepare("INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)")
-    .bind(id, normalized, createdAt)
+    .prepare("INSERT INTO users (id, email, nickname, created_at) VALUES (?, ?, ?, ?)")
+    .bind(id, normalized, nickname, createdAt)
     .run();
-  return { id, email: normalized, nickname: null, created_at: createdAt };
+  return { id, email: normalized, nickname, created_at: createdAt };
 }
 
 export async function createSession(db: D1Database, userId: string): Promise<string> {

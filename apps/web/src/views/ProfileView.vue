@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import {
+  getAvatarUrl,
   getDisplayName,
   getProfile,
   getSavedLands,
@@ -87,11 +88,21 @@ onMounted(loadProfile);
 <template>
   <section class="space-y-8 max-w-xl">
     <div class="flex items-center justify-between gap-4">
-      <div>
-        <h1 class="text-2xl font-bold text-primary">Profile</h1>
-        <p v-if="session" class="text-base-content/60 text-sm mt-0.5">
-          {{ getDisplayName(session) }}
-        </p>
+      <div class="flex items-center gap-4">
+        <img
+          v-if="session"
+          :src="getAvatarUrl(session.email)"
+          :alt="getDisplayName(session)"
+          class="w-14 h-14 rounded-full bg-base-200 border border-base-300"
+        />
+        <div>
+          <h1 class="text-2xl font-bold text-primary">
+            {{ session ? getDisplayName(session) : "Profile" }}
+          </h1>
+          <p v-if="session" class="text-base-content/60 text-sm mt-0.5">
+            {{ session.email }}
+          </p>
+        </div>
       </div>
       <button class="btn btn-ghost btn-sm text-error" @click="handleSignOut">
         Sign out
