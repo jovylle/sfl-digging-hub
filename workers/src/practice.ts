@@ -1,5 +1,6 @@
 import {
   computePracticeScore,
+  type DigEntry,
   type PracticeLeaderboardEntry,
   type PracticePatternSource,
   type PracticeRunPayload,
@@ -28,6 +29,7 @@ export type PracticeRunRow = {
   treasure_count: number;
   score: number;
   created_at: string;
+  digs_json: string | null;
 };
 
 export function validatePracticeRunBody(body: unknown): PracticeRunPayload | string {
@@ -73,6 +75,10 @@ export function validatePracticeRunBody(body: unknown): PracticeRunPayload | str
   const anonymousId =
     typeof b.anonymousId === "string" ? b.anonymousId.slice(0, 64) : undefined;
 
+  const digs: DigEntry[] | undefined = Array.isArray(b.digs)
+    ? (b.digs as DigEntry[]).slice(0, 200)
+    : undefined;
+
   return {
     patternSource: source as PracticePatternSource,
     patternDate,
@@ -83,6 +89,7 @@ export function validatePracticeRunBody(body: unknown): PracticeRunPayload | str
     treasureCount: Math.floor(treasureCount),
     displayName: displayName || undefined,
     anonymousId,
+    digs,
   };
 }
 
@@ -99,12 +106,16 @@ export async function savePracticeRun(
     payload.displayName ||
     (sessionUser ? sessionUser.email.split("@")[0]?.slice(0, MAX_DISPLAY_NAME) : null);
 
+  const digsJson = payload.digs && payload.digs.length > 0
+    ? JSON.stringify(payload.digs)
+    : null;
+
   await db
     .prepare(
       `INSERT INTO practice_runs (
         id, user_id, anonymous_id, display_name, pattern_source, pattern_date,
-        pattern_keys_json, dig_count, duration_ms, victory, treasure_count, score, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        pattern_keys_json, dig_count, duration_ms, victory, treasure_count, score, created_at, digs_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -120,6 +131,7 @@ export async function savePracticeRun(
       payload.treasureCount,
       score,
       createdAt,
+      digsJson,
     )
     .run();
 
@@ -134,7 +146,18 @@ export async function savePracticeRun(
     treasureCount: payload.treasureCount,
     createdAt,
     owned: Boolean(sessionUser),
+    digs: payload.digs ?? undefined,
   };
+}
+
+function parseDigs(raw: string | null): DigEntry[] | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as DigEntry[]) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function rowToEntry(row: PracticeRunRow, viewerUserId?: string | null): PracticeLeaderboardEntry {
@@ -149,6 +172,7 @@ function rowToEntry(row: PracticeRunRow, viewerUserId?: string | null): Practice
     treasureCount: row.treasure_count,
     createdAt: row.created_at,
     owned: Boolean(viewerUserId && row.user_id === viewerUserId),
+    digs: parseDigs(row.digs_json),
   };
 }
 

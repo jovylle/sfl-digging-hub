@@ -3,6 +3,8 @@ export const PRACTICE_DIG_PENALTY_MS = 5000;
 
 export type PracticePatternSource = "daily" | "random";
 
+import type { DigEntry } from "./dig";
+
 export type PracticeRunPayload = {
   patternSource: PracticePatternSource;
   patternDate?: string | null;
@@ -13,6 +15,7 @@ export type PracticeRunPayload = {
   treasureCount: number;
   displayName?: string;
   anonymousId?: string;
+  digs?: DigEntry[];
 };
 
 export type PracticeLeaderboardEntry = {
@@ -26,6 +29,7 @@ export type PracticeLeaderboardEntry = {
   treasureCount: number;
   createdAt: string;
   owned?: boolean;
+  digs?: DigEntry[];
 };
 
 export function computePracticeScore(durationMs: number, digCount: number): number {

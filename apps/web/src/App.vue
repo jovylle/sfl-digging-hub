@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import { RouterLink, RouterView } from "vue-router";
 import { getAvatarUrl, getDisplayName, getSession, getSessionToken, type SessionInfo } from "@/api/client";
+import { D1G_BASE_URL, D1G_LABEL } from "@/utils/d1gUrl";
 
 const sessionInfo = ref<SessionInfo | null>(null);
 
@@ -38,12 +39,12 @@ onMounted(loadSession);
           Practice
         </RouterLink>
         <a
-          href="https://d1g.uk"
+          :href="D1G_BASE_URL"
           class="btn btn-ghost btn-sm"
           target="_blank"
           rel="noopener noreferrer"
         >
-          Dig on d1g.uk
+          Dig on {{ D1G_LABEL }}
         </a>
         <RouterLink
           v-if="sessionInfo"
@@ -68,7 +69,7 @@ onMounted(loadSession);
     </main>
     <footer class="footer footer-center text-base-content/60 text-xs py-6">
       <aside>
-        <p>Dig on d1g.uk · Stories and practice scores on the hub</p>
+        <p>Dig on {{ D1G_LABEL }} · Stories and practice scores on the hub</p>
       </aside>
     </footer>
   </div>

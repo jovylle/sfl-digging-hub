@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
+import { D1G_LABEL } from "@/utils/d1gUrl";
 import {
   getLandDays,
   getSavedLands,
@@ -82,7 +83,7 @@ watch(() => props.landId, async () => {
       <div>
         <h1 class="text-2xl font-bold text-primary">Land #{{ landId }}</h1>
         <p class="text-base-content/70 text-sm mt-1">
-          Public dig history synced from d1g.uk
+          Public dig history synced from {{ D1G_LABEL }}
         </p>
       </div>
 

@@ -1,3 +1,4 @@
+export * from "./dig";
 export * from "./googleOAuth";
 export * from "./testnet";
 export * from "./practice";
@@ -7,22 +8,7 @@ export * from "./reactions";
 
 export type Visibility = "private" | "unlisted" | "public";
 
-export type DigTool = "Sand Shovel" | "Sand Drill";
-
-export type DigTile = {
-  x: number;
-  y: number;
-  dugAt: number;
-  items: Record<string, number>;
-  tool: DigTool;
-};
-
-/** One chronological dig step (grouped Sand Drill tiles share one order). */
-export type DigEntry = {
-  order: number;
-  dugAt: number;
-  tiles: DigTile[];
-};
+import type { DigEntry, DigTile } from "./dig";
 
 export type SnapshotStats = Record<string, unknown>;
 

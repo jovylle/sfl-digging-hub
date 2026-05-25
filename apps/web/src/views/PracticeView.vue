@@ -2,7 +2,9 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { formatPracticeScore, type PracticeLeaderboardEntry } from "@sfl-digging-hub/shared";
 import { getPracticeLeaderboard, getPracticeVictories } from "@/api/client";
+import { D1G_BASE_URL, D1G_LABEL } from "@/utils/d1gUrl";
 import { formatDayLabel, groupByUtcDate } from "@/utils/dayGroup";
+import DigResultsGrid from "@/components/DigResultsGrid.vue";
 
 const PAGE_SIZE = 30;
 
@@ -125,8 +127,8 @@ watch(date, () => {
       <h1 class="text-2xl font-bold text-primary">Practice</h1>
       <p class="text-base-content/70 text-sm mt-1">
         Victories from
-        <a href="https://d1g.uk/practice" class="link link-primary" target="_blank" rel="noopener"
-          >d1g.uk practice mode</a
+        <a :href="`${D1G_BASE_URL}/practice`" class="link link-primary" target="_blank" rel="noopener"
+          >{{ D1G_LABEL }} practice mode</a
         >
         — find all treasures on a round. Lower score is better (time + dig penalty).
       </p>
@@ -201,23 +203,31 @@ watch(date, () => {
           </div>
           <ul class="space-y-3">
             <li v-for="row in group.items" :key="row.id" class="card bg-base-200">
-              <div class="card-body py-4 flex-row items-center justify-between gap-4">
-                <div class="min-w-0">
-                  <p class="font-semibold truncate">
-                    {{ row.displayName || "Anonymous" }}
-                    <span v-if="row.owned" class="badge badge-success badge-xs ml-1">you</span>
-                  </p>
-                  <p class="text-sm text-base-content/60">
-                    {{ formatTime(row.createdAt) }}
-                    · {{ row.digCount }} digs · {{ formatDuration(row.durationMs) }}
-                    · score {{ formatPracticeScore(row.score) }}
-                  </p>
-                  <p class="text-xs text-base-content/50 mt-0.5">
-                    {{ row.treasureCount }} treasure{{ row.treasureCount !== 1 ? "s" : "" }}
-                    · {{ source === "daily" ? "daily patterns" : "random round" }}
-                  </p>
+              <div class="card-body py-4 flex flex-col sm:flex-row gap-4 sm:items-start">
+                <DigResultsGrid
+                  v-if="row.digs && row.digs.length"
+                  :digs="row.digs"
+                  compact
+                  class="w-24 sm:w-28 shrink-0"
+                />
+                <div class="flex-1 min-w-0 flex flex-row items-center justify-between gap-3">
+                  <div class="min-w-0">
+                    <p class="font-semibold truncate">
+                      {{ row.displayName || "Anonymous" }}
+                      <span v-if="row.owned" class="badge badge-success badge-xs ml-1">you</span>
+                    </p>
+                    <p class="text-sm text-base-content/60">
+                      {{ formatTime(row.createdAt) }}
+                      · {{ row.digCount }} digs · {{ formatDuration(row.durationMs) }}
+                      · score {{ formatPracticeScore(row.score) }}
+                    </p>
+                    <p class="text-xs text-base-content/50 mt-0.5">
+                      {{ row.treasureCount }} treasure{{ row.treasureCount !== 1 ? "s" : "" }}
+                      · {{ source === "daily" ? "daily patterns" : "random round" }}
+                    </p>
+                  </div>
+                  <span class="badge badge-primary badge-lg shrink-0">Victory</span>
                 </div>
-                <span class="badge badge-primary badge-lg shrink-0">Victory</span>
               </div>
             </li>
           </ul>
@@ -243,7 +253,7 @@ watch(date, () => {
       </template>
 
       <p v-else class="text-base-content/50 text-sm">
-        No victories yet for this filter. Win a round on d1g.uk practice (with Save score on).
+        No victories yet for this filter. Win a round on {{ D1G_LABEL }} practice (with Save score on).
       </p>
     </template>
 
@@ -282,7 +292,7 @@ watch(date, () => {
           </table>
         </div>
         <p v-else class="text-base-content/50 text-sm">
-          No ranked runs yet. Finish a practice round on d1g.uk to appear here.
+          No ranked runs yet. Finish a practice round on {{ D1G_LABEL }} to appear here.
         </p>
       </template>
     </template>

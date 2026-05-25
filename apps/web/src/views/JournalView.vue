@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { loadJournalLandId, saveJournalLandId } from "@/api/client";
 import { isTestnetLandId, testnetLandHubMessage } from "@/utils/testnet";
+import { D1G_LABEL } from "@/utils/d1gUrl";
 
 const router = useRouter();
 const landId = ref("");
@@ -36,7 +37,7 @@ onMounted(() => {
     <div>
       <h1 class="text-2xl font-bold text-primary">Journal</h1>
       <p class="text-base-content/70 text-sm mt-1">
-        Look up public dig history by land ID — same data synced from d1g.uk.
+        Look up public dig history by land ID — same data synced from {{ D1G_LABEL }}.
       </p>
     </div>
 
@@ -47,7 +48,7 @@ onMounted(() => {
           v-model="landId"
           type="text"
           class="input input-bordered w-full"
-          placeholder="e.g. 12345 (mainnet; testnet uses ?testnet on d1g.uk)"
+          :placeholder="`e.g. 12345 (mainnet; testnet uses ?testnet on ${D1G_LABEL})`"
         />
       </label>
       <button type="submit" class="btn btn-primary">

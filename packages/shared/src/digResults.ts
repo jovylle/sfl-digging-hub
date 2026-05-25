@@ -1,4 +1,4 @@
-import type { DigEntry, DigTool } from "./index.js";
+import type { DigEntry, DigTool } from "./dig";
 
 const GRID_SIZE = 10;
 
