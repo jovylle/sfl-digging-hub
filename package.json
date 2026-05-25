@@ -15,6 +15,8 @@
     "db:migrate:local": "npm run db:migrate:local -w @sfl-digging-hub/worker",
     "cf:setup": "bash workers/scripts/cf-setup.sh",
     "cf:migrate:remote": "npm run cf:migrate -w @sfl-digging-hub/worker",
+    "cf:migrate:production": "wrangler d1 migrations apply sfl-digging-hub --remote --env production",
+    "cf:migrate:beta": "wrangler d1 migrations apply sfl-digging-hub-beta --remote --env beta",
     "cf:deploy": "npm run deploy -w @sfl-digging-hub/worker",
     "cf:deploy:beta": "npm run deploy:beta -w @sfl-digging-hub/worker",
     "cf:deploy:production": "wrangler deploy --env production",

@@ -50,18 +50,19 @@ Only connect **one** Worker project in Git, or use Actions instead—both `produ
 
 ## First-time / migrations
 
-**Production D1** (once):
+**Production D1** (once, from repo root):
 
 ```bash
-cd workers
-npx wrangler d1 migrations apply sfl-digging-hub --remote --env production
+npm run cf:migrate:production
 ```
 
 **Beta D1** (once):
 
 ```bash
-npx wrangler d1 migrations apply sfl-digging-hub-beta --remote --env beta
+npm run cf:migrate:beta
 ```
+
+Migrations live in `workers/migrations/` (root `wrangler.toml` sets `migrations_dir`). From `workers/` you can also run `npm run cf:migrate -w @sfl-digging-hub/worker`.
 
 ---
 

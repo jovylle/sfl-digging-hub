@@ -19,6 +19,7 @@ fallthrough = true
 binding = "DB"
 database_name = "sfl-digging-hub"
 database_id = "74d3d51c-3a53-44ca-a6ed-497a224897b3"
+migrations_dir = "workers/migrations"
 
 [[r2_buckets]]
 binding = "SCREENSHOTS"
@@ -45,6 +46,7 @@ name = "sfl-digging-hub-api-beta"
 binding = "DB"
 database_name = "sfl-digging-hub-beta"
 database_id = "36a111d2-43a3-44b4-8400-12822da1b3a5"
+migrations_dir = "workers/migrations"
 
 [[env.beta.r2_buckets]]
 binding = "SCREENSHOTS"
@@ -76,6 +78,7 @@ name = "sfl-digging-hub-api"
 binding = "DB"
 database_name = "sfl-digging-hub"
 database_id = "74d3d51c-3a53-44ca-a6ed-497a224897b3"
+migrations_dir = "workers/migrations"
 
 [[env.production.r2_buckets]]
 binding = "SCREENSHOTS"
