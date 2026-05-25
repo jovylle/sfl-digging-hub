@@ -213,14 +213,23 @@ function toggleExpand(id: string) {
           <ul class="space-y-3">
             <li v-for="row in group.items" :key="row.id" class="card bg-base-200">
               <div class="card-body py-4 flex flex-col sm:flex-row gap-4 sm:items-start">
-                <div
-                  v-if="(row.digs && row.digs.length) || (row.formations && row.formations.length)"
-                  class="flex gap-2 shrink-0"
-                >
+                <div class="flex gap-2 shrink-0">
                   <div v-if="row.digs && row.digs.length" class="flex flex-col items-center gap-0.5">
                     <span class="text-[0.6rem] text-base-content/40 uppercase tracking-wide">Digs</span>
                     <DigResultsGrid :digs="row.digs" compact class="w-24 sm:w-28" />
                   </div>
+                  <a
+                    v-else
+                    :href="`${D1G_BASE_URL}/practice/run/${row.id}`"
+                    target="_blank"
+                    rel="noopener"
+                    class="w-24 sm:w-28 aspect-square rounded-lg border-2 border-dashed border-base-content/20 flex flex-col items-center justify-center gap-1 text-base-content/40 hover:border-primary hover:text-primary transition-colors shrink-0"
+                    title="View full grid on d1g"
+                    @click.stop
+                  >
+                    <span class="text-xl">⛏️</span>
+                    <span class="text-[0.6rem] font-medium text-center leading-tight">View grid<br>on d1g ↗</span>
+                  </a>
                   <div v-if="row.formations && row.formations.length" class="flex flex-col items-center gap-0.5">
                     <span class="text-[0.6rem] text-base-content/40 uppercase tracking-wide">Formations</span>
                     <FormationGrid :formations="row.formations" compact class="w-24 sm:w-28" />
