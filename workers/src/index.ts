@@ -28,6 +28,7 @@ import {
   verifyWriteSecret,
 } from "./digDay";
 import {
+  getPracticeRunById,
   listPracticeLeaderboard,
   listRecentPracticeVictories,
   savePracticeRun,
@@ -433,6 +434,21 @@ export default {
 
         const saved = await savePracticeRun(env.DB, validated, request);
         return json(saved, 201, cors);
+      }
+
+      const practiceRunMatch = path.match(/^\/v1\/practice\/runs\/([^/]+)$/);
+      if (practiceRunMatch && request.method === "GET") {
+        const runId = practiceRunMatch[1];
+        const sessionUser = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+        );
+        const run = await getPracticeRunById(env.DB, runId, sessionUser?.id ?? null);
+        if (!run) return error("Practice run not found", 404, cors);
+        return json(run, 200, {
+          ...cors,
+          "Cache-Control": "public, max-age=60, must-revalidate",
+        });
       }
 
       if (path === "/v1/practice/leaderboard" && request.method === "GET") {

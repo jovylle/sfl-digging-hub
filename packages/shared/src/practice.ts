@@ -5,6 +5,11 @@ export type PracticePatternSource = "daily" | "random";
 
 import type { DigEntry } from "./dig";
 
+export type FormationPlacement = {
+  key: string;
+  tiles: Array<{ x: number; y: number }>;
+};
+
 export type PracticeRunPayload = {
   patternSource: PracticePatternSource;
   patternDate?: string | null;
@@ -14,8 +19,11 @@ export type PracticeRunPayload = {
   victory: boolean;
   treasureCount: number;
   displayName?: string;
+  /** Alias for displayName — preferred field from the sfl-crab practice client. */
+  nickname?: string;
   anonymousId?: string;
   digs?: DigEntry[];
+  formations?: FormationPlacement[];
 };
 
 export type PracticeLeaderboardEntry = {
@@ -23,13 +31,16 @@ export type PracticeLeaderboardEntry = {
   displayName: string | null;
   patternSource: PracticePatternSource;
   patternDate: string | null;
+  patternKeys: string[];
   digCount: number;
   durationMs: number;
   score: number;
   treasureCount: number;
+  victory: boolean;
   createdAt: string;
   owned?: boolean;
   digs?: DigEntry[];
+  formations?: FormationPlacement[];
 };
 
 export function computePracticeScore(durationMs: number, digCount: number): number {
