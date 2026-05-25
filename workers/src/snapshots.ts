@@ -31,6 +31,7 @@ export function rowToPublic(row: SnapshotRow): SnapshotPublic {
   return {
     id: row.id,
     utcDate: row.utc_date,
+    landId: row.land_id,
     displayName: row.display_name,
     patterns: JSON.parse(row.patterns_json),
     digs: JSON.parse(row.digs_json) as DigEntry[],

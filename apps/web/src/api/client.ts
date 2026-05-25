@@ -143,8 +143,53 @@ export function setSessionToken(token: string | null): void {
   else localStorage.removeItem(SESSION_KEY);
 }
 
-export function getSession(): Promise<{ email: string }> {
+export type SessionInfo = {
+  email: string;
+  nickname: string | null;
+};
+
+export function getDisplayName(session: SessionInfo): string {
+  return session.nickname?.trim() || session.email.split("@")[0] || "Player";
+}
+
+export function getSession(): Promise<SessionInfo> {
   return request("/v1/auth/session", { headers: authHeaders() });
+}
+
+export type SavedLand = {
+  landId: string;
+  savedAt: string;
+};
+
+export function getProfile(): Promise<SessionInfo> {
+  return request("/v1/profile", { headers: authHeaders() });
+}
+
+export function updateProfile(data: { nickname: string | null }): Promise<{ nickname: string | null }> {
+  return request("/v1/profile", {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function getSavedLands(): Promise<{ lands: SavedLand[] }> {
+  return request("/v1/profile/saved-lands", { headers: authHeaders() });
+}
+
+export function saveLand(landId: string): Promise<{ landId: string; savedAt: string; total: number }> {
+  return request("/v1/profile/saved-lands", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ landId }),
+  });
+}
+
+export function unsaveLand(landId: string): Promise<{ ok: boolean }> {
+  return request(`/v1/profile/saved-lands/${encodeURIComponent(landId)}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
 }
 
 export function signInWithGoogle(idToken: string): Promise<{

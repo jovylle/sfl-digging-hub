@@ -50,6 +50,13 @@ import {
   handleStaticOgPng,
   injectOgIntoHtml,
 } from "./og";
+import {
+  handleDeleteSavedLand,
+  handleGetProfile,
+  handleGetSavedLands,
+  handlePostSavedLand,
+  handlePutProfile,
+} from "./profile";
 
 export interface Env {
   DB: D1Database;
@@ -248,7 +255,7 @@ export default {
       if (path === "/v1/auth/session" && request.method === "GET") {
         const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
         if (!user) return error("Not signed in", 401, cors);
-        return json({ email: user.email }, 200, cors);
+        return json({ email: user.email, nickname: user.nickname ?? null }, 200, cors);
       }
 
       if (path === "/v1/auth/claim-comments" && request.method === "POST") {
@@ -264,6 +271,39 @@ export default {
           body.anonymousId,
         );
         return json({ claimedComments: claimed }, 200, cors);
+      }
+
+      if (path === "/v1/profile" && request.method === "GET") {
+        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        if (!user) return error("Not signed in", 401, cors);
+        return handleGetProfile(env.DB, user, cors);
+      }
+
+      if (path === "/v1/profile" && request.method === "PUT") {
+        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        if (!user) return error("Not signed in", 401, cors);
+        const body = await request.json().catch(() => null);
+        return handlePutProfile(env.DB, user, body, cors);
+      }
+
+      if (path === "/v1/profile/saved-lands" && request.method === "GET") {
+        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        if (!user) return error("Not signed in", 401, cors);
+        return handleGetSavedLands(env.DB, user, cors);
+      }
+
+      if (path === "/v1/profile/saved-lands" && request.method === "POST") {
+        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        if (!user) return error("Not signed in", 401, cors);
+        const body = await request.json().catch(() => null);
+        return handlePostSavedLand(env.DB, user, body, cors);
+      }
+
+      const deleteSavedLandMatch = path.match(/^\/v1\/profile\/saved-lands\/([^/]+)$/);
+      if (deleteSavedLandMatch && request.method === "DELETE") {
+        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        if (!user) return error("Not signed in", 401, cors);
+        return handleDeleteSavedLand(env.DB, user, deleteSavedLandMatch[1], cors);
       }
 
       if (path === "/v1/snapshots" && request.method === "POST") {
@@ -654,7 +694,9 @@ export default {
           const displayName =
             typeof body.displayName === "string" && body.displayName.trim()
               ? body.displayName.trim().slice(0, 32)
-              : sessionUser.email.split("@")[0]?.slice(0, 32) || "Player";
+              : (sessionUser.nickname?.slice(0, 32) ||
+                 sessionUser.email.split("@")[0]?.slice(0, 32) ||
+                 "Player");
 
           const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
           const ipHash = await sha256Hex(`ip:${ip}`);

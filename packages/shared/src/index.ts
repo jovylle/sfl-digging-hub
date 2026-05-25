@@ -40,6 +40,7 @@ export type CreateSnapshotBody = {
 export type SnapshotPublic = {
   id: string;
   utcDate: string;
+  landId: string | null;
   displayName: string | null;
   patterns: unknown[];
   digs: DigEntry[];

@@ -5,6 +5,7 @@ const SESSION_DAYS = 30;
 export type UserRow = {
   id: string;
   email: string;
+  nickname: string | null;
   created_at: string;
 };
 
@@ -39,7 +40,7 @@ export async function findOrCreateUser(
 ): Promise<UserRow> {
   const normalized = normalizeEmail(email);
   const existing = await db
-    .prepare("SELECT id, email, created_at FROM users WHERE email = ?")
+    .prepare("SELECT id, email, nickname, created_at FROM users WHERE email = ?")
     .bind(normalized)
     .first<UserRow>();
   if (existing) return existing;
@@ -50,7 +51,7 @@ export async function findOrCreateUser(
     .prepare("INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)")
     .bind(id, normalized, createdAt)
     .run();
-  return { id, email: normalized, created_at: createdAt };
+  return { id, email: normalized, nickname: null, created_at: createdAt };
 }
 
 export async function createSession(db: D1Database, userId: string): Promise<string> {
@@ -76,7 +77,7 @@ export async function getUserFromSession(
   const tokenHash = await sha256Hex(`session:${sessionToken}`);
   const row = await db
     .prepare(
-      `SELECT u.id, u.email, u.created_at FROM sessions s
+      `SELECT u.id, u.email, u.nickname, u.created_at FROM sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ? AND s.expires_at > ?`,
     )
