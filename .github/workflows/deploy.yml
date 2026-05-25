@@ -1,0 +1,46 @@
+# master → hub.d1g.uk + api.d1g.uk (production Worker)
+# development → beta.hub.d1g.uk + beta.api.d1g.uk (beta Worker)
+#
+# Requires repo secret: CLOUDFLARE_API_TOKEN (Workers edit + Account read)
+# Optional: CLOUDFLARE_ACCOUNT_ID if not set in wrangler.toml
+
+name: Deploy hub
+
+on:
+  push:
+    branches:
+      - master
+      - development
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build -w @sfl-digging-hub/shared
+      - run: npm run build -w @sfl-digging-hub/web
+
+      - name: Deploy production (master)
+        if: github.ref == 'refs/heads/master'
+        run: npm run cf:deploy:production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy beta (development)
+        if: github.ref == 'refs/heads/development'
+        run: npm run cf:deploy:beta:only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

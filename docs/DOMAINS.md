@@ -1,92 +1,94 @@
-# Domains (beta first, production later)
+# Domains and branches
 
-## Beta / staging (use now)
+| Git branch | Worker | Hub UI | API |
+|------------|--------|--------|-----|
+| **master** | `sfl-digging-hub-api` | https://hub.d1g.uk | https://api.d1g.uk |
+| **development** | `sfl-digging-hub-api-beta` | https://beta.hub.d1g.uk | https://beta.api.d1g.uk |
 
-| Hostname | Worker | Purpose |
-|----------|--------|---------|
-| **beta.hub.d1g.uk** | `sfl-digging-hub-api-beta` | Hub UI + same-origin `/v1` |
-| **beta.api.d1g.uk** | `sfl-digging-hub-api-beta` | API for Share from `development.d1g.uk` / `beta.d1g.uk` |
+Beta uses separate **D1** (`sfl-digging-hub-beta`) and **R2** so staging data is not mixed with production.
 
-Separate **D1** (`sfl-digging-hub-beta`) and **R2** so staging data is not mixed with production.
+---
 
-### 1. Deploy the beta Worker
+## Automatic deploy (GitHub Actions)
+
+Pushes to `master` or `development` run [.github/workflows/deploy.yml](../.github/workflows/deploy.yml).
+
+**One-time setup**
+
+1. Cloudflare dashboard → **My Profile** → **API Tokens** → create token with **Edit Cloudflare Workers** (and account read).
+2. GitHub repo → **Settings** → **Secrets and variables** → **Actions** → add `CLOUDFLARE_API_TOKEN`.
+3. If `account_id` is not in `wrangler.toml`, also add `CLOUDFLARE_ACCOUNT_ID`.
+
+**Disable Cloudflare “Builds” auto-deploy** on the Worker if you use Actions only (otherwise you may deploy twice).
 
 ```bash
-cd workers
-npm run deploy:beta
+# Manual deploy (same as CI)
+npm ci && npm run build -w @sfl-digging-hub/shared && npm run build -w @sfl-digging-hub/web
+npm run cf:deploy:production   # master / prod
+npm run cf:deploy:beta:only      # development / beta
 ```
 
-Or from repo root: `npm run cf:deploy:beta`
+---
 
-This registers `beta.hub.d1g.uk` and `beta.api.d1g.uk` from `wrangler.toml` routes (zone `d1g.uk` must be on Cloudflare).
+## Cloudflare Workers Builds (alternative to Actions)
 
-### 2. Migrations (beta D1, once)
+Same branch mapping in the dashboard (**Workers** → your project → **Settings** → **Builds**):
+
+| Setting | Value |
+|---------|--------|
+| **Production branch** | `master` |
+| **Build command** | `npm ci && npm run build -w @sfl-digging-hub/shared && npm run build -w @sfl-digging-hub/web` |
+| **Deploy command** | `npm run cf:deploy:production` |
+| **Non-production branch builds** | Enabled |
+| **Non-production branch deploy command** | `npm run cf:deploy:beta:only` |
+
+Use `wrangler deploy` (not bare `versions upload`) so the branch updates the **live** custom domains.
+
+Only connect **one** Worker project in Git, or use Actions instead—both `production` and `beta` envs deploy different Worker **names** from the same repo root `wrangler.toml`.
+
+---
+
+## First-time / migrations
+
+**Production D1** (once):
 
 ```bash
 cd workers
+npx wrangler d1 migrations apply sfl-digging-hub --remote --env production
+```
+
+**Beta D1** (once):
+
+```bash
 npx wrangler d1 migrations apply sfl-digging-hub-beta --remote --env beta
 ```
 
-### 3. DNS
+---
 
-If Wrangler did not create records automatically:
-
-**DNS → d1g.uk → Records**
-
-| Type | Name | Target |
-|------|------|--------|
-| CNAME | `beta.hub` | `sfl-digging-hub-api-beta.<account>.workers.dev` (or value shown in Worker → Domains) |
-| CNAME | `beta.api` | same Worker |
-
-Often Cloudflare adds these when you attach **Custom domains** on the Worker.
-
-### 4. Verify
+## Verify
 
 ```bash
+curl https://api.d1g.uk/health
+curl -I https://hub.d1g.uk/
+
 curl https://beta.api.d1g.uk/health
 curl -I https://beta.hub.d1g.uk/
 ```
 
-Browser: https://beta.hub.d1g.uk/
+---
 
-### 5. Secrets (dashboard)
+## Secrets (not in git)
 
-Set on **beta** Worker (and Netlify for d1g.uk):
+Set on **each** Worker in Cloudflare (or `workers/.dev.vars` locally):
 
-- `HUB_WRITE_SECRET` — shared with Netlify `HUB_WRITE_SECRET` (dig-day proxy)
-- `GOOGLE_CLIENT_ID` — in `wrangler.toml` / `packages/shared/src/googleOAuth.ts` (public; comment sign-in)
-
-### 6. Git deploy (Cloudflare dashboard)
-
-Until production is ready, set **Deploy command** to:
-
-```bash
-cd workers && npx wrangler deploy --env beta
-```
-
-Keep the same **Build command** (`npm ci` + build shared + web).
+- `HUB_WRITE_SECRET` — shared with Netlify on d1g.uk (dig-day proxy)
+- `GOOGLE_CLIENT_ID` — also in `wrangler.toml` / `packages/shared/src/googleOAuth.ts` (public)
 
 ---
 
-## Production (later)
+## d1g.uk Share URLs
 
-| Hostname | Worker |
-|----------|--------|
-| hub.d1g.uk | `sfl-digging-hub-api` |
-| api.d1g.uk | `sfl-digging-hub-api` |
-
-1. Uncomment `[[env.production.routes]]` in `workers/wrangler.toml` (or add domains in dashboard).
-2. `npm run cf:deploy` (or `wrangler deploy --env production`).
-3. Switch Git **Deploy command** back to `--env production`.
-
----
-
-## d1g.uk integration (milestone 4)
-
-Point Share POST at:
-
-```text
-https://beta.api.d1g.uk/v1/snapshots
-```
-
-while testing; use `https://api.d1g.uk/v1/snapshots` after production cutover.
+| Environment | Snapshot POST |
+|-------------|----------------|
+| Production (`master`) | `https://api.d1g.uk/v1/snapshots` |
+| Beta (`development`) | `https://beta.api.d1g.uk/v1/snapshots` |

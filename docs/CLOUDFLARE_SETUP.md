@@ -119,33 +119,35 @@ CORS_ORIGINS = "https://d1g.uk,https://beta.d1g.uk,https://development.d1g.uk,ht
 
 ---
 
-## 6. Connect GitHub (Worker deploy from Git)
+## 6. Branch → domain deploy
 
-**Workers & Pages** → **Create** → **Worker** → **Connect to Git** → `jovylle/sfl-digging-hub`
+| Branch | Domains | npm script |
+|--------|---------|------------|
+| `master` | `hub.d1g.uk`, `api.d1g.uk` | `npm run cf:deploy:production` |
+| `development` | `beta.hub.d1g.uk`, `beta.api.d1g.uk` | `npm run cf:deploy:beta:only` |
+
+Full details: **[DOMAINS.md](DOMAINS.md)**.
+
+### Option A — GitHub Actions (recommended)
+
+Workflow: `.github/workflows/deploy.yml`. Add `CLOUDFLARE_API_TOKEN` (and optionally `CLOUDFLARE_ACCOUNT_ID`) as GitHub Actions secrets. Turn off Cloudflare Worker **Builds** auto-deploy if you use Actions only.
+
+### Option B — Cloudflare Workers Builds
+
+**Workers & Pages** → Worker → **Settings** → **Builds** → connect `jovylle/sfl-digging-hub`
 
 | Setting | Value |
 |---------|--------|
 | **Production branch** | `master` |
 | **Root directory** | `/` (repo root) |
 | **Build command** | `npm ci && npm run build -w @sfl-digging-hub/shared && npm run build -w @sfl-digging-hub/web` |
-| **Deploy command** | `npm run cf:upload:production` |
+| **Deploy command** | `npm run cf:deploy:production` |
+| **Non-production branch builds** | Enabled |
+| **Non-production branch deploy command** | `npm run cf:deploy:beta:only` |
 
-For **beta**, use `npm run cf:upload:beta` instead.
+Use `wrangler deploy` (via the scripts above), not bare `versions upload`, so custom domains get the new version.
 
-Cloudflare’s default `npx wrangler versions upload` runs from the repo root and fails with *“Missing entry-point”* because `wrangler.toml` lives in `workers/`. The scripts above pass `--config workers/wrangler.toml` and the right `--env`.
-
-Equivalent one-liners:
-
-```bash
-npx wrangler versions upload --config workers/wrangler.toml --env production
-npx wrangler versions upload --config workers/wrangler.toml --env beta
-```
-
-Legacy `wrangler deploy` also works if your project still uses it:
-
-```bash
-cd workers && npx wrangler deploy --env production
-```
+Repo root `wrangler.toml` is the config Cloudflare Git expects (not `workers/wrangler.toml` alone).
 
 No separate Pages project. The Vue `dist` folder is uploaded as **Worker assets** via `wrangler.toml` `[assets]`.
 

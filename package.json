@@ -17,6 +17,8 @@
     "cf:migrate:remote": "npm run cf:migrate -w @sfl-digging-hub/worker",
     "cf:deploy": "npm run deploy -w @sfl-digging-hub/worker",
     "cf:deploy:beta": "npm run deploy:beta -w @sfl-digging-hub/worker",
+    "cf:deploy:production": "wrangler deploy --env production",
+    "cf:deploy:beta:only": "wrangler deploy --env beta",
     "cf:upload:production": "wrangler versions upload --env production",
     "cf:upload:beta": "wrangler versions upload --env beta"
   }

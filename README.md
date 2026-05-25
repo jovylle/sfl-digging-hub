@@ -141,7 +141,7 @@ Hub does **not** need `useGridEngine` for v1 replay — a read-only replay grid 
 - [x] 4. d1g.uk dig-day → hub D1 (Netlify proxy; same `/api/dig-day` for Vue)
 - [x] 5. Community feed + comments + R2 upload (API; brag card UI later)
 - [ ] 6. Brag card PNG + Open Graph for Discord links
-- [x] 7. Beta deploy (`beta.hub.d1g.uk`, `beta.api.d1g.uk`); prod domains when ready
+- [x] 7. Deploy: `master` → hub.d1g.uk; `development` → beta.hub.d1g.uk — **[docs/DOMAINS.md](docs/DOMAINS.md)**
 
 ## Development
 
@@ -154,7 +154,7 @@ npm run dev                # Web on http://localhost:5173 (proxies /v1 to API)
 
 **Cloudflare (D1, R2, one Worker for API + UI):** see **[docs/CLOUDFLARE_SETUP.md](docs/CLOUDFLARE_SETUP.md)** — Workers static assets, not Pages.
 
-**Domains:** beta first → **[docs/DOMAINS.md](docs/DOMAINS.md)** (`beta.hub.d1g.uk`, `beta.api.d1g.uk`).
+**Domains:** **[docs/DOMAINS.md](docs/DOMAINS.md)** — `master` → hub.d1g.uk; `development` → beta.hub.d1g.uk.
 
 **Layout:** `workers/` (API), `apps/web/` (Vue UI), `packages/shared/` (types + `buildDigTimeline`).
 

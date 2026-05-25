@@ -99,10 +99,10 @@ HUB_BASE_URL = "https://hub.d1g.uk"
 API_BASE_URL = "https://api.d1g.uk"
 GOOGLE_CLIENT_ID = "725426501556-8g0s8oibhcueqtjpq249f7basjai2n4d.apps.googleusercontent.com"
 
-# Uncomment when going live on prod hostnames:
-# [[env.production.routes]]
-# pattern = "hub.d1g.uk"
-# custom_domain = true
-# [[env.production.routes]]
-# pattern = "api.d1g.uk"
-# custom_domain = true
+[[env.production.routes]]
+pattern = "hub.d1g.uk"
+custom_domain = true
+
+[[env.production.routes]]
+pattern = "api.d1g.uk"
+custom_domain = true
