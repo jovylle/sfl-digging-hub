@@ -101,7 +101,7 @@ onMounted(() => {
             :to="{ name: 'dig', params: { id: d.id } }"
             class="btn btn-secondary btn-sm shrink-0"
           >
-            View dig
+            View grid
           </RouterLink>
         </div>
       </li>

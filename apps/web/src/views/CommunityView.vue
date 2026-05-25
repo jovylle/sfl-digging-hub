@@ -84,7 +84,9 @@ onMounted(loadInitial);
   <section class="space-y-6">
     <div>
       <h1 class="text-2xl font-bold text-primary">Community</h1>
-      <p class="text-base-content/70 text-sm mt-1">All public digs, newest first.</p>
+      <p class="text-base-content/70 text-sm mt-1">
+        Day grids by land ID — what was dug on each tile, in order. Not replays.
+      </p>
     </div>
 
     <div v-if="signInHint" class="alert alert-info text-sm">
@@ -121,7 +123,9 @@ onMounted(loadInitial);
                     {{ item.displayName || (item.landId ? `Land ${item.landId}` : "Desert dig") }}
                   </p>
                   <p class="text-sm text-base-content/60">
-                    {{ item.digCount }} digs
+                    {{ item.utcDate }}
+                    <span v-if="item.landId"> · Land {{ item.landId }}</span>
+                    · {{ item.digCount }} digs
                     <span v-if="treasureCount(item) > 0"> · {{ treasureCount(item) }} treasures</span>
                     <span v-if="item.commentCount > 0"> · {{ item.commentCount }} comments</span>
                   </p>
@@ -139,7 +143,7 @@ onMounted(loadInitial);
                 :to="{ name: 'dig', params: { id: item.id } }"
                 class="btn btn-primary btn-sm shrink-0 self-start sm:self-center"
               >
-                View dig
+                View grid
               </RouterLink>
             </div>
           </li>

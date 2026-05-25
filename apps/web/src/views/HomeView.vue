@@ -19,7 +19,7 @@ onMounted(async () => {
   <section class="space-y-6">
     <h1 class="text-3xl font-bold text-primary">SFL Digging Hub</h1>
     <p class="text-base-content/80 text-lg max-w-2xl">
-      Save, share, and discuss desert digs when the game API only shows today.
+      Save, share, and discuss desert day grids when the game API only shows today.
       Dig on
       <a
         href="https://d1g.uk"
@@ -28,7 +28,7 @@ onMounted(async () => {
         rel="noopener"
         >d1g.uk</a
       >
-      — open replays, community stories, and practice leaderboards here.
+      — browse public day grids, journal by land ID, and practice leaderboards here.
     </p>
 
     <div v-if="apiOk === true" class="alert alert-success py-2 text-sm">
