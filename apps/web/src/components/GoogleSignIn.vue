@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { GOOGLE_CLIENT_ID } from "@sfl-digging-hub/shared";
 import {
   getSession,
   getSessionToken,
@@ -10,7 +11,7 @@ import {
 
 const emit = defineEmits<{ signedIn: [email: string] }>();
 
-const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+const clientId = GOOGLE_CLIENT_ID;
 const email = ref<string | null>(null);
 const error = ref<string | null>(null);
 const ready = ref(false);
@@ -103,11 +104,8 @@ function logout() {
       </button>
     </p>
     <template v-else>
-      <p v-if="!clientId" class="text-base-content/50 text-xs">
-        Google sign-in not configured (VITE_GOOGLE_CLIENT_ID).
-      </p>
-      <div v-show="clientId" id="google-signin-btn" />
-      <p v-if="!ready && clientId" class="text-base-content/50 text-xs">
+      <div id="google-signin-btn" />
+      <p v-if="!ready" class="text-base-content/50 text-xs">
         Loading Google sign-in…
       </p>
     </template>

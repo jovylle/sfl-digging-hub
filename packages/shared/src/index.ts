@@ -1,3 +1,4 @@
+export * from "./googleOAuth";
 export * from "./testnet";
 export * from "./practice";
 export * from "./digResults";

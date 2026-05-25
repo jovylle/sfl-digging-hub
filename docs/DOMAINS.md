@@ -54,7 +54,7 @@ Browser: https://beta.hub.d1g.uk/
 Set on **beta** Worker (and Netlify for d1g.uk):
 
 - `HUB_WRITE_SECRET` — shared with Netlify `HUB_WRITE_SECRET` (dig-day proxy)
-- `GOOGLE_CLIENT_ID` — optional; Google sign-in for comments (email only)
+- `GOOGLE_CLIENT_ID` — in `wrangler.toml` / `packages/shared/src/googleOAuth.ts` (public; comment sign-in)
 
 ### 6. Git deploy (Cloudflare dashboard)
 
