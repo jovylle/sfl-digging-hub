@@ -5,6 +5,7 @@ import { getPracticeLeaderboard, getPracticeVictories } from "@/api/client";
 import { D1G_BASE_URL, D1G_LABEL } from "@/utils/d1gUrl";
 import { formatDayLabel, groupByUtcDate } from "@/utils/dayGroup";
 import DigResultsGrid from "@/components/DigResultsGrid.vue";
+import FormationGrid from "@/components/FormationGrid.vue";
 
 const PAGE_SIZE = 30;
 
@@ -119,6 +120,14 @@ watch(source, () => {
 watch(date, () => {
   if (source.value === "daily") loadLeaderboard();
 });
+
+const expandedRows = ref(new Set<string>());
+function toggleExpand(id: string) {
+  const next = new Set(expandedRows.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  expandedRows.value = next;
+}
 </script>
 
 <template>
@@ -204,12 +213,19 @@ watch(date, () => {
           <ul class="space-y-3">
             <li v-for="row in group.items" :key="row.id" class="card bg-base-200">
               <div class="card-body py-4 flex flex-col sm:flex-row gap-4 sm:items-start">
-                <DigResultsGrid
-                  v-if="row.digs && row.digs.length"
-                  :digs="row.digs"
-                  compact
-                  class="w-24 sm:w-28 shrink-0"
-                />
+                <div
+                  v-if="(row.digs && row.digs.length) || (row.formations && row.formations.length)"
+                  class="flex gap-2 shrink-0"
+                >
+                  <div v-if="row.digs && row.digs.length" class="flex flex-col items-center gap-0.5">
+                    <span class="text-[0.6rem] text-base-content/40 uppercase tracking-wide">Digs</span>
+                    <DigResultsGrid :digs="row.digs" compact class="w-24 sm:w-28" />
+                  </div>
+                  <div v-if="row.formations && row.formations.length" class="flex flex-col items-center gap-0.5">
+                    <span class="text-[0.6rem] text-base-content/40 uppercase tracking-wide">Formations</span>
+                    <FormationGrid :formations="row.formations" compact class="w-24 sm:w-28" />
+                  </div>
+                </div>
                 <div class="flex-1 min-w-0 flex flex-row items-center justify-between gap-3">
                   <div class="min-w-0">
                     <p class="font-semibold truncate">
@@ -225,6 +241,13 @@ watch(date, () => {
                       {{ row.treasureCount }} treasure{{ row.treasureCount !== 1 ? "s" : "" }}
                       · {{ source === "daily" ? "daily patterns" : "random round" }}
                     </p>
+                    <div v-if="row.patternKeys && row.patternKeys.length" class="flex flex-wrap gap-1 mt-1">
+                      <span
+                        v-for="key in row.patternKeys"
+                        :key="key"
+                        class="badge badge-xs badge-ghost"
+                      >{{ key }}</span>
+                    </div>
                   </div>
                   <span class="badge badge-primary badge-lg shrink-0">Victory</span>
                 </div>
@@ -275,19 +298,55 @@ watch(date, () => {
                 <th>Score</th>
                 <th>Digs</th>
                 <th>Time</th>
+                <th />
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(row, i) in leaderboard" :key="row.id">
-                <td>{{ i + 1 }}</td>
-                <td>
-                  {{ row.displayName || "Anonymous" }}
-                  <span v-if="row.owned" class="badge badge-success badge-xs ml-1">you</span>
-                </td>
-                <td class="font-mono text-xs">{{ formatPracticeScore(row.score) }}</td>
-                <td>{{ row.digCount }}</td>
-                <td class="font-mono text-xs">{{ formatDuration(row.durationMs) }}</td>
-              </tr>
+              <template v-for="(row, i) in leaderboard" :key="row.id">
+                <tr
+                  :class="(row.digs?.length || row.formations?.length || row.patternKeys?.length) ? 'cursor-pointer hover' : ''"
+                  @click="(row.digs?.length || row.formations?.length || row.patternKeys?.length) && toggleExpand(row.id)"
+                >
+                  <td>{{ i + 1 }}</td>
+                  <td>
+                    {{ row.displayName || "Anonymous" }}
+                    <span v-if="row.owned" class="badge badge-success badge-xs ml-1">you</span>
+                  </td>
+                  <td class="font-mono text-xs">{{ formatPracticeScore(row.score) }}</td>
+                  <td>{{ row.digCount }}</td>
+                  <td class="font-mono text-xs">{{ formatDuration(row.durationMs) }}</td>
+                  <td class="text-right">
+                    <span
+                      v-if="row.digs?.length || row.formations?.length || row.patternKeys?.length"
+                      class="text-base-content/40 text-xs select-none"
+                    >{{ expandedRows.has(row.id) ? "▲" : "▼" }}</span>
+                  </td>
+                </tr>
+                <tr v-if="expandedRows.has(row.id)" class="bg-base-100">
+                  <td colspan="6" class="py-3 px-4">
+                    <div class="flex flex-wrap gap-5 items-start">
+                      <div v-if="row.digs?.length" class="flex flex-col items-center gap-1">
+                        <span class="text-[0.6rem] text-base-content/40 uppercase tracking-wide">Digs</span>
+                        <DigResultsGrid :digs="row.digs" compact class="w-28" />
+                      </div>
+                      <div v-if="row.formations?.length" class="flex flex-col items-center gap-1">
+                        <span class="text-[0.6rem] text-base-content/40 uppercase tracking-wide">Formations</span>
+                        <FormationGrid :formations="row.formations" compact class="w-28" />
+                      </div>
+                      <div v-if="row.patternKeys?.length" class="flex flex-col gap-1">
+                        <span class="text-[0.6rem] text-base-content/40 uppercase tracking-wide">Patterns</span>
+                        <div class="flex flex-wrap gap-1">
+                          <span
+                            v-for="key in row.patternKeys"
+                            :key="key"
+                            class="badge badge-sm badge-outline"
+                          >{{ key }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
