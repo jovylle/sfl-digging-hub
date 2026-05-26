@@ -13,6 +13,7 @@ import {
 } from "@/api/client";
 import DigResultsGrid from "@/components/DigResultsGrid.vue";
 import GoogleSignIn from "@/components/GoogleSignIn.vue";
+import { publicDigTitle } from "@/utils/anonymize";
 
 const props = defineProps<{ id: string }>();
 
@@ -79,9 +80,7 @@ async function onSignedIn(email: string) {
 }
 
 const pageTitle = computed(() =>
-  snapshot.value?.visibility === "public" || !snapshot.value?.displayName
-    ? "Desert dig"
-    : snapshot.value.displayName,
+  publicDigTitle(snapshot.value?.visibility, snapshot.value?.displayName),
 );
 
 onMounted(async () => {

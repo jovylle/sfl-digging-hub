@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { checkHealth, getCommunity, type CommunityItem } from "@/api/client";
 import DigResultsGrid from "@/components/DigResultsGrid.vue";
+import { publicDigTitle } from "@/utils/anonymize";
 import { D1G_BASE_URL, D1G_LABEL } from "@/utils/d1gUrl";
 
 const apiOk = ref<boolean | null>(null);
@@ -106,7 +107,9 @@ onMounted(async () => {
           <div class="card-body py-3 px-3 gap-2">
             <DigResultsGrid :digs="item.digs" compact class="w-full" />
             <div class="min-w-0">
-              <p class="font-semibold text-sm truncate">Desert dig</p>
+              <p class="font-semibold text-sm truncate">
+                {{ publicDigTitle("public", item.displayName) }}
+              </p>
               <p class="text-xs text-base-content/60">
                 {{ item.digCount }} digs
                 <span v-if="treasureCount(item) > 0"> · {{ treasureCount(item) }} treasures</span>

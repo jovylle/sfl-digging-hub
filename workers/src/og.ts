@@ -1,6 +1,7 @@
 import type { DigEntry } from "@sfl-digging-hub/shared";
 import { summarizeDigLoot } from "@sfl-digging-hub/shared";
 import { renderOgPng, type OgCardData } from "./og/card";
+import { sanitizeDisplayName } from "./anonymize";
 import { getSnapshotById, type SnapshotRow } from "./snapshots";
 
 const PNG_CACHE_HEADERS = {
@@ -17,7 +18,7 @@ function snapshotToCard(row: SnapshotRow): OgCardData {
       ? (stats.treasureCount as number)
       : loot.treasures;
   const title =
-    row.visibility === "public" ? "Desert dig" : row.display_name?.trim() || "Desert dig";
+    sanitizeDisplayName(row.display_name, row.visibility, row.land_id) || "Desert dig";
   return {
     title,
     subtitle: row.utc_date,
@@ -189,7 +190,7 @@ export function buildSnapshotMeta(
       ? (stats.treasureCount as number)
       : loot.treasures;
   const name =
-    row.visibility === "public" ? "Desert dig" : row.display_name?.trim() || "Desert dig";
+    sanitizeDisplayName(row.display_name, row.visibility, row.land_id) || "Desert dig";
   return {
     title: `${name} — ${row.utc_date} · SFL Digging Hub`,
     description: `${digs.length} digs, ${treasureCount} treasures on ${row.utc_date}. Replay the dig on hub.d1g.uk.`,

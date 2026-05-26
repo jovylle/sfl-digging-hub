@@ -1,4 +1,5 @@
 import type { DigEntry } from "@sfl-digging-hub/shared";
+import { sanitizeDisplayName } from "./anonymize";
 import { randomId } from "./crypto";
 import { hashLandId, type SnapshotRow } from "./snapshots";
 
@@ -143,8 +144,11 @@ export function rowToDigDay(row: SnapshotRow): DigDayPayload {
     ? (JSON.parse(row.mark_events_json) as MarkEvent[])
     : [];
   const visibleLandId = publicLandId(row.land_id);
-  const visibleDisplayName =
-    row.visibility === "public" ? null : row.display_name?.trim() || null;
+  const visibleDisplayName = sanitizeDisplayName(
+    row.display_name,
+    row.visibility,
+    row.land_id,
+  );
   return {
     v: 1,
     landId: visibleLandId || "",

@@ -9,6 +9,7 @@ import {
 } from "@/api/client";
 import DigResultsGrid from "@/components/DigResultsGrid.vue";
 import ReactionBar from "@/components/ReactionBar.vue";
+import { publicDigTitle } from "@/utils/anonymize";
 
 const PAGE_SIZE = 30;
 
@@ -105,7 +106,9 @@ onMounted(loadInitial);
             />
             <div class="flex-1 min-w-0 space-y-2">
               <div>
-                <p class="font-semibold truncate">Desert dig</p>
+                <p class="font-semibold truncate">
+                  {{ publicDigTitle("public", item.displayName) }}
+                </p>
                 <p class="text-sm text-base-content/60">
                   {{ item.digCount }} digs
                   <span v-if="treasureCount(item) > 0"> · {{ treasureCount(item) }} treasures</span>
