@@ -14,16 +14,6 @@ function treasureCount(item: CommunityItem): number {
   return typeof n === "number" ? n : 0;
 }
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60_000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
-
 onMounted(async () => {
   try {
     const h = await checkHealth();
@@ -57,7 +47,7 @@ onMounted(async () => {
           rel="noopener"
           >{{ D1G_LABEL }}</a
         >
-        — browse public day grids, journal by land ID, and practice leaderboards here.
+        — browse anonymous community digs, track today's grids on your profile, and practice leaderboards here.
       </p>
 
       <div v-if="apiOk === true" class="alert alert-success py-2 text-sm">
@@ -76,13 +66,13 @@ onMounted(async () => {
       <RouterLink to="/community" class="card bg-base-200 hover:shadow-lg transition-shadow">
         <div class="card-body">
           <h2 class="card-title text-lg">Community</h2>
-          <p class="text-sm text-base-content/70">Public digs by date</p>
+          <p class="text-sm text-base-content/70">Random anonymous day grids</p>
         </div>
       </RouterLink>
-      <RouterLink to="/journal" class="card bg-base-200 hover:shadow-lg transition-shadow">
+      <RouterLink to="/profile" class="card bg-base-200 hover:shadow-lg transition-shadow">
         <div class="card-body">
-          <h2 class="card-title text-lg">Journal</h2>
-          <p class="text-sm text-base-content/70">Dig history by land ID</p>
+          <h2 class="card-title text-lg">My Land Digs</h2>
+          <p class="text-sm text-base-content/70">Today's grids for your saved lands (private)</p>
         </div>
       </RouterLink>
       <RouterLink to="/practice" class="card bg-base-200 hover:shadow-lg transition-shadow">
@@ -95,7 +85,7 @@ onMounted(async () => {
 
     <div class="space-y-3">
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold">Recent Digs</h2>
+        <h2 class="text-lg font-semibold">Random digs</h2>
         <RouterLink to="/community" class="text-sm link link-primary">View all →</RouterLink>
       </div>
 
@@ -116,13 +106,10 @@ onMounted(async () => {
           <div class="card-body py-3 px-3 gap-2">
             <DigResultsGrid :digs="item.digs" compact class="w-full" />
             <div class="min-w-0">
-              <p class="font-semibold text-sm truncate">
-                {{ item.displayName || "Desert dig" }}
-              </p>
+              <p class="font-semibold text-sm truncate">Desert dig</p>
               <p class="text-xs text-base-content/60">
                 {{ item.digCount }} digs
                 <span v-if="treasureCount(item) > 0"> · {{ treasureCount(item) }} treasures</span>
-                · {{ timeAgo(item.createdAt) }}
               </p>
             </div>
           </div>

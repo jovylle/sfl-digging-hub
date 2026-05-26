@@ -35,14 +35,6 @@ export type CommunityItem = {
   };
 };
 
-export type LandDayItem = {
-  id: string;
-  utcDate: string;
-  digCount: number;
-  updatedAt: string;
-  replayUrl: string;
-};
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -67,19 +59,27 @@ export function getSnapshot(id: string): Promise<SnapshotPublic> {
   return request(`/v1/snapshots/${id}`);
 }
 
-export function getLandDays(landId: string): Promise<{ landId: string; days: LandDayItem[] }> {
-  return request(`/v1/lands/${encodeURIComponent(landId)}/days`);
-}
-
 export function getCommunity(options: {
-  before?: string | null;
+  offset?: number;
   limit?: number;
-} = {}): Promise<{ items: CommunityItem[]; nextCursor: string | null }> {
+} = {}): Promise<{ items: CommunityItem[]; nextOffset: number | null }> {
   const params = new URLSearchParams();
-  if (options.before) params.set("before", options.before);
+  if (options.offset) params.set("offset", String(options.offset));
   if (options.limit) params.set("limit", String(options.limit));
   const q = params.toString();
   return request(`/v1/community${q ? `?${q}` : ""}`);
+}
+
+export type MyLandDigToday = {
+  landId: string;
+  snapshotId: string | null;
+  digCount: number;
+  digs: DigEntry[];
+  replayUrl: string | null;
+};
+
+export function getMyDigsToday(): Promise<{ utcDate: string; lands: MyLandDigToday[] }> {
+  return request("/v1/profile/my-digs-today", { headers: authHeaders() });
 }
 
 export function getComments(snapshotId: string): Promise<{ comments: Comment[] }> {
@@ -110,16 +110,6 @@ export function reactToSnapshot(
 
 export function checkHealth(): Promise<{ ok: boolean }> {
   return request("/health");
-}
-
-export const JOURNAL_LAND_KEY = "sfl-hub-journal-land";
-
-export function loadJournalLandId(): string | null {
-  return localStorage.getItem(JOURNAL_LAND_KEY);
-}
-
-export function saveJournalLandId(landId: string): void {
-  localStorage.setItem(JOURNAL_LAND_KEY, landId);
 }
 
 const ANON_KEY = "sfl-hub-anonymous-id";

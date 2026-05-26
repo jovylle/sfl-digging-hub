@@ -4,20 +4,24 @@ import { RouterLink, useRouter } from "vue-router";
 import {
   getAvatarUrl,
   getDisplayName,
+  getMyDigsToday,
   getProfile,
-  getSavedLands,
   getSessionToken,
+  saveLand,
   signOut,
   unsaveLand,
   updateProfile,
-  type SavedLand,
+  type MyLandDigToday,
   type SessionInfo,
 } from "@/api/client";
+import DigResultsGrid from "@/components/DigResultsGrid.vue";
+import { D1G_LABEL } from "@/utils/d1gUrl";
 
 const router = useRouter();
 
 const session = ref<SessionInfo | null>(null);
-const savedLands = ref<SavedLand[]>([]);
+const myDigs = ref<MyLandDigToday[]>([]);
+const digsUtcDate = ref<string>("");
 const loadError = ref<string | null>(null);
 
 const nicknameInput = ref("");
@@ -26,6 +30,9 @@ const nicknameSaving = ref(false);
 const nicknameSaved = ref(false);
 
 const unsavingId = ref<string | null>(null);
+const addLandId = ref("");
+const addLandError = ref<string | null>(null);
+const addLandSaving = ref(false);
 
 async function loadProfile() {
   if (!getSessionToken()) {
@@ -33,10 +40,11 @@ async function loadProfile() {
     return;
   }
   try {
-    const [profile, lands] = await Promise.all([getProfile(), getSavedLands()]);
+    const [profile, digs] = await Promise.all([getProfile(), getMyDigsToday()]);
     session.value = profile;
     nicknameInput.value = profile.nickname ?? "";
-    savedLands.value = lands.lands;
+    myDigs.value = digs.lands;
+    digsUtcDate.value = digs.utcDate;
   } catch {
     loadError.value = "Failed to load profile. Please sign in again.";
   }
@@ -65,11 +73,32 @@ async function saveNickname() {
   }
 }
 
+async function addLand() {
+  const id = addLandId.value.trim();
+  if (!id) {
+    addLandError.value = "Land ID is required";
+    return;
+  }
+  addLandError.value = null;
+  addLandSaving.value = true;
+  try {
+    await saveLand(id);
+    addLandId.value = "";
+    const digs = await getMyDigsToday();
+    myDigs.value = digs.lands;
+    digsUtcDate.value = digs.utcDate;
+  } catch (e) {
+    addLandError.value = e instanceof Error ? e.message : "Failed to add land";
+  } finally {
+    addLandSaving.value = false;
+  }
+}
+
 async function removeSavedLand(landId: string) {
   unsavingId.value = landId;
   try {
     await unsaveLand(landId);
-    savedLands.value = savedLands.value.filter((l) => l.landId !== landId);
+    myDigs.value = myDigs.value.filter((l) => l.landId !== landId);
   } catch {
     // silently ignore
   } finally {
@@ -118,7 +147,6 @@ onMounted(loadProfile);
     </div>
 
     <template v-if="session">
-      <!-- Identity -->
       <div class="card bg-base-200">
         <div class="card-body space-y-4">
           <h2 class="card-title text-base">Your identity</h2>
@@ -139,9 +167,7 @@ onMounted(loadProfile);
 
           <div class="form-control">
             <label class="label">
-              <span class="label-text text-xs uppercase tracking-wide">
-                Nickname
-              </span>
+              <span class="label-text text-xs uppercase tracking-wide">Nickname</span>
               <span class="label-text-alt text-base-content/50">
                 shown instead of your email username
               </span>
@@ -179,46 +205,81 @@ onMounted(loadProfile);
         </div>
       </div>
 
-      <!-- Saved lands -->
-      <div class="card bg-base-200">
+      <div id="lands" class="card bg-base-200">
         <div class="card-body space-y-4">
-          <h2 class="card-title text-base">
-            Saved lands
-            <span class="badge badge-neutral badge-sm">{{ savedLands.length }}</span>
-          </h2>
+          <div>
+            <h2 class="card-title text-base">
+              My Land Digs
+              <span class="badge badge-neutral badge-sm">{{ myDigs.length }}</span>
+            </h2>
+            <p class="text-sm text-base-content/60 mt-1">
+              Private view — today only ({{ digsUtcDate }} UTC). Sync from
+              {{ D1G_LABEL }} to see your grid here. Public community feeds never show land IDs.
+            </p>
+          </div>
 
-          <p v-if="savedLands.length === 0" class="text-base-content/50 text-sm">
-            No saved lands yet. Browse a land page and hit the bookmark button to save it here.
+          <form class="flex gap-2" @submit.prevent="addLand">
+            <input
+              v-model="addLandId"
+              type="text"
+              inputmode="numeric"
+              class="input input-bordered input-sm flex-1"
+              placeholder="Add land ID (mainnet or testnet)"
+            />
+            <button type="submit" class="btn btn-primary btn-sm" :disabled="addLandSaving">
+              <span v-if="addLandSaving" class="loading loading-spinner loading-xs" />
+              {{ addLandSaving ? "" : "Add" }}
+            </button>
+          </form>
+          <p v-if="addLandError" class="text-error text-xs">{{ addLandError }}</p>
+
+          <p v-if="myDigs.length === 0" class="text-base-content/50 text-sm">
+            Add a land ID to track today's dig privately.
           </p>
 
-          <ul v-else class="space-y-2">
+          <ul v-else class="space-y-4">
             <li
-              v-for="land in savedLands"
+              v-for="land in myDigs"
               :key="land.landId"
-              class="flex items-center justify-between gap-3 bg-base-100 rounded-lg px-4 py-3"
+              class="bg-base-100 rounded-lg p-4 space-y-3"
             >
-              <div>
-                <RouterLink
-                  :to="{ name: 'land', params: { landId: land.landId } }"
-                  class="font-semibold text-primary link link-hover"
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="font-semibold text-primary">Land #{{ land.landId }}</p>
+                  <p class="text-xs text-base-content/50 mt-0.5">
+                    <template v-if="land.snapshotId">
+                      {{ land.digCount }} digs synced today
+                    </template>
+                    <template v-else>No dig synced yet today</template>
+                  </p>
+                </div>
+                <button
+                  class="btn btn-ghost btn-xs text-error shrink-0"
+                  :disabled="unsavingId === land.landId"
+                  @click="removeSavedLand(land.landId)"
                 >
-                  Land #{{ land.landId }}
-                </RouterLink>
-                <p class="text-xs text-base-content/50 mt-0.5">
-                  Saved {{ new Date(land.savedAt).toLocaleDateString() }}
-                </p>
+                  <span
+                    v-if="unsavingId === land.landId"
+                    class="loading loading-spinner loading-xs"
+                  />
+                  <span v-else>Remove</span>
+                </button>
               </div>
-              <button
-                class="btn btn-ghost btn-xs text-error"
-                :disabled="unsavingId === land.landId"
-                @click="removeSavedLand(land.landId)"
+
+              <DigResultsGrid
+                v-if="land.digs.length"
+                :digs="land.digs"
+                compact
+                class="w-28"
+              />
+
+              <RouterLink
+                v-if="land.replayUrl"
+                :to="{ name: 'dig', params: { id: land.snapshotId! } }"
+                class="btn btn-secondary btn-sm"
               >
-                <span
-                  v-if="unsavingId === land.landId"
-                  class="loading loading-spinner loading-xs"
-                />
-                <span v-else>Remove</span>
-              </button>
+                View today's grid
+              </RouterLink>
             </li>
           </ul>
         </div>

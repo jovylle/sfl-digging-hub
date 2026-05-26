@@ -19,8 +19,8 @@ import { randomId, sha256Hex } from "./crypto";
 import {
   emptyDigDay,
   getDigDayRow,
+  getTodayUTC,
   isValidLandId,
-  listLandDays,
   rowToDigDayWithReplay,
   saveDigDay,
   validateDigDayBody,
@@ -52,6 +52,7 @@ import {
 } from "./og";
 import {
   handleDeleteSavedLand,
+  handleGetMyDigsToday,
   handleGetProfile,
   handleGetSavedLands,
   handlePostSavedLand,
@@ -212,19 +213,30 @@ export default {
         if (!isValidLandId(landId)) {
           return error("Invalid landId", 400, cors);
         }
-        const days = await listLandDays(env.DB, landId);
+        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        if (!user) return error("Not signed in", 401, cors);
+        const saved = await env.DB
+          .prepare(
+            "SELECT 1 FROM user_saved_lands WHERE user_id = ? AND land_id = ? LIMIT 1",
+          )
+          .bind(user.id, landId)
+          .first();
+        if (!saved) return error("Land not in your saved list", 403, cors);
+        const utcDate = getTodayUTC();
+        const row = await getDigDayRow(env.DB, landId, utcDate);
         const base = hubBase.replace(/\/$/, "");
-        return json(
-          {
-            landId,
-            days: days.map((d) => ({
-              ...d,
-              replayUrl: `${base}/dig/${d.id}`,
-            })),
-          },
-          200,
-          cors,
-        );
+        const days = row
+          ? [
+              {
+                id: row.id,
+                utcDate: row.utc_date,
+                digCount: (JSON.parse(row.digs_json) as unknown[]).length,
+                updatedAt: row.updated_at,
+                replayUrl: `${base}/dig/${row.id}`,
+              },
+            ]
+          : [];
+        return json({ landId, utcDate, days }, 200, cors);
       }
 
       if (path === "/v1/auth/google" && request.method === "POST") {
@@ -280,6 +292,12 @@ export default {
         if (!user) return error("Not signed in", 401, cors);
         const body = await request.json().catch(() => null);
         return handlePutProfile(env.DB, user, body, cors);
+      }
+
+      if (path === "/v1/profile/my-digs-today" && request.method === "GET") {
+        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        if (!user) return error("Not signed in", 401, cors);
+        return handleGetMyDigsToday(env.DB, user, hubBase, cors);
       }
 
       if (path === "/v1/profile/saved-lands" && request.method === "GET") {
@@ -341,7 +359,7 @@ export default {
           100,
           Math.max(1, Number(url.searchParams.get("limit") || 30) || 30),
         );
-        const before = url.searchParams.get("before");
+        const offset = Math.max(0, Number(url.searchParams.get("offset") || 0) || 0);
         const fetchCount = limit + 1;
         const sessionUser = await getUserFromSession(
           env.DB,
@@ -349,7 +367,7 @@ export default {
         );
         const viewerId = sessionUser?.id ?? null;
 
-        const selectCols = `s.id, s.utc_date, s.land_id, s.display_name, s.created_at, s.digs_json, s.stats_json,
+        const selectCols = `s.id, s.utc_date, s.created_at, s.digs_json, s.stats_json,
               (SELECT COUNT(*) FROM comments c WHERE c.snapshot_id = s.id) AS comment_count,
               (SELECT json_group_object(emoji, c) FROM (
                  SELECT emoji, COUNT(*) AS c FROM dig_reactions WHERE snapshot_id = s.id GROUP BY emoji
@@ -358,8 +376,6 @@ export default {
         type Row = {
           id: string;
           utc_date: string;
-          land_id: string | null;
-          display_name: string | null;
           created_at: string;
           digs_json: string;
           stats_json: string;
@@ -367,25 +383,16 @@ export default {
           reactions_json: string | null;
           viewer_emoji: string | null;
         };
-        const rows = before
-          ? await env.DB
-              .prepare(
-                `SELECT ${selectCols}
-                 FROM snapshots s
-                 WHERE s.visibility = 'public' AND s.created_at < ?
-                 ORDER BY s.created_at DESC LIMIT ?`,
-              )
-              .bind(viewerId, before, fetchCount)
-              .all<Row>()
-          : await env.DB
-              .prepare(
-                `SELECT ${selectCols}
-                 FROM snapshots s
-                 WHERE s.visibility = 'public'
-                 ORDER BY s.created_at DESC LIMIT ?`,
-              )
-              .bind(viewerId, fetchCount)
-              .all<Row>();
+        const rows = await env.DB
+          .prepare(
+            `SELECT ${selectCols}
+             FROM snapshots s
+             WHERE s.visibility = 'public'
+             ORDER BY RANDOM()
+             LIMIT ? OFFSET ?`,
+          )
+          .bind(viewerId, fetchCount, offset)
+          .all<Row>();
 
         const all = rows.results ?? [];
         const hasMore = all.length > limit;
@@ -402,7 +409,7 @@ export default {
             id: r.id,
             utcDate: r.utc_date,
             landId: null,
-            displayName: r.display_name,
+            displayName: null,
             digs: digList,
             digCount: digList.length,
             commentCount: Number(r.comment_count) || 0,
@@ -412,8 +419,8 @@ export default {
             reactions: { counts, userEmoji },
           };
         });
-        const nextCursor = hasMore ? feed[feed.length - 1].createdAt : null;
-        return json({ items: feed, nextCursor }, 200, cors);
+        const nextOffset = hasMore ? offset + limit : null;
+        return json({ items: feed, nextOffset }, 200, cors);
       }
 
       if (path === "/v1/practice/runs" && request.method === "POST") {

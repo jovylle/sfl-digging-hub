@@ -5,13 +5,10 @@ import { summarizeDigLoot } from "@sfl-digging-hub/shared";
 import { RouterLink } from "vue-router";
 import {
   getComments,
-  getSavedLands,
   getSession,
   getSessionToken,
   getSnapshot,
   postComment,
-  saveLand,
-  unsaveLand,
   type Comment,
 } from "@/api/client";
 import DigResultsGrid from "@/components/DigResultsGrid.vue";
@@ -25,9 +22,6 @@ const comments = ref<Comment[]>([]);
 const commentBody = ref("");
 const sessionEmail = ref<string | null>(null);
 const signedIn = computed(() => Boolean(sessionEmail.value));
-
-const isSaved = ref(false);
-const saveToggling = ref(false);
 
 const loot = computed(() =>
   snapshot.value ? summarizeDigLoot(snapshot.value.digs) : null,
@@ -51,38 +45,9 @@ async function refreshSession() {
   }
 }
 
-async function loadSavedStatus(landId: string) {
-  if (!getSessionToken()) return;
-  try {
-    const res = await getSavedLands();
-    isSaved.value = res.lands.some((l) => l.landId === landId);
-  } catch {
-    // not critical
-  }
-}
-
-async function toggleSave() {
-  if (!signedIn.value || !snapshot.value?.landId) return;
-  saveToggling.value = true;
-  try {
-    if (isSaved.value) {
-      await unsaveLand(snapshot.value.landId);
-      isSaved.value = false;
-    } else {
-      await saveLand(snapshot.value.landId);
-      isSaved.value = true;
-    }
-  } catch {
-    // silently ignore
-  } finally {
-    saveToggling.value = false;
-  }
-}
-
 async function load() {
   error.value = null;
   snapshot.value = null;
-  isSaved.value = false;
   try {
     const [snap, c] = await Promise.all([
       getSnapshot(props.id),
@@ -90,9 +55,6 @@ async function load() {
     ]);
     snapshot.value = snap;
     comments.value = c.comments;
-    if (snap.landId) {
-      await loadSavedStatus(snap.landId);
-    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Failed to load dig";
   }
@@ -114,10 +76,13 @@ async function submitComment() {
 
 async function onSignedIn(email: string) {
   sessionEmail.value = email;
-  if (snapshot.value?.landId) {
-    await loadSavedStatus(snapshot.value.landId);
-  }
 }
+
+const pageTitle = computed(() =>
+  snapshot.value?.visibility === "public" || !snapshot.value?.displayName
+    ? "Desert dig"
+    : snapshot.value.displayName,
+);
 
 onMounted(async () => {
   await refreshSession();
@@ -135,47 +100,17 @@ watch(() => props.id, load);
   </section>
   <section v-else class="space-y-8">
     <header class="space-y-1">
-      <h1 class="text-2xl font-bold text-primary">
-        {{ snapshot.displayName || "Desert dig" }}
-      </h1>
+      <h1 class="text-2xl font-bold text-primary">{{ pageTitle }}</h1>
       <p class="text-base-content/70 text-sm">
         {{ snapshot.utcDate }} · day grid · {{ snapshot.digs.length }} digs ·
         {{ statsTreasures }} treasures
       </p>
-      <div v-if="snapshot.landId" class="flex items-center gap-2 flex-wrap pt-0.5">
-        <RouterLink
-          :to="{ name: 'land', params: { landId: snapshot.landId } }"
-          class="text-xs text-base-content/50 link link-hover"
-        >
-          Land #{{ snapshot.landId }}
-        </RouterLink>
-        <button
-          v-if="signedIn"
-          class="btn btn-xs gap-1"
-          :class="isSaved ? 'btn-secondary' : 'btn-ghost border border-base-300'"
-          :disabled="saveToggling"
-          @click="toggleSave"
-        >
-          <span v-if="saveToggling" class="loading loading-spinner loading-xs" />
-          <svg
-            v-else
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-3 w-3"
-            :fill="isSaved ? 'currentColor' : 'none'"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-            />
-          </svg>
-          {{ isSaved ? "Saved" : "Save land" }}
-        </button>
-      </div>
-      <p class="text-base-content/50 text-xs">
+      <p v-if="snapshot.visibility === 'public'" class="text-base-content/50 text-xs">
+        Anonymous showcase — only people with this link can find this dig. Add your land ID on
+        <RouterLink to="/profile" class="link link-hover">My Land Digs</RouterLink>
+        to track today's grid privately.
+      </p>
+      <p v-else class="text-base-content/50 text-xs">
         Each tile shows what was found and the dig order number — not a step-by-step replay.
       </p>
     </header>

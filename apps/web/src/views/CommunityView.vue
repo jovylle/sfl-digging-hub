@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import type { ReactionEmoji } from "@sfl-digging-hub/shared";
 import {
@@ -7,7 +7,6 @@ import {
   getSessionToken,
   type CommunityItem,
 } from "@/api/client";
-import { formatDayLabel, groupByUtcDate } from "@/utils/dayGroup";
 import DigResultsGrid from "@/components/DigResultsGrid.vue";
 import ReactionBar from "@/components/ReactionBar.vue";
 
@@ -18,44 +17,38 @@ function treasureCount(item: CommunityItem): number {
   return typeof n === "number" ? n : 0;
 }
 
-function utcDay(item: CommunityItem): string {
-  return item.createdAt.slice(0, 10);
-}
-
 const items = ref<CommunityItem[]>([]);
-const nextCursor = ref<string | null>(null);
+const nextOffset = ref<number | null>(null);
 const error = ref<string | null>(null);
 const signInHint = ref(false);
 const loading = ref(false);
 const loadingMore = ref(false);
 const signedIn = ref<boolean>(Boolean(getSessionToken()));
 
-const groups = computed(() => groupByUtcDate(items.value, utcDay));
-
 async function loadInitial() {
   loading.value = true;
   error.value = null;
   try {
-    const res = await getCommunity({ limit: PAGE_SIZE });
+    const res = await getCommunity({ limit: PAGE_SIZE, offset: 0 });
     items.value = res.items;
-    nextCursor.value = res.nextCursor;
+    nextOffset.value = res.nextOffset;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Failed to load feed";
     items.value = [];
-    nextCursor.value = null;
+    nextOffset.value = null;
   } finally {
     loading.value = false;
   }
 }
 
 async function loadMore() {
-  if (!nextCursor.value || loadingMore.value) return;
+  if (nextOffset.value == null || loadingMore.value) return;
   loadingMore.value = true;
   error.value = null;
   try {
-    const res = await getCommunity({ before: nextCursor.value, limit: PAGE_SIZE });
+    const res = await getCommunity({ offset: nextOffset.value, limit: PAGE_SIZE });
     items.value = items.value.concat(res.items);
-    nextCursor.value = res.nextCursor;
+    nextOffset.value = res.nextOffset;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Failed to load more";
   } finally {
@@ -85,7 +78,8 @@ onMounted(loadInitial);
     <div>
       <h1 class="text-2xl font-bold text-primary">Community</h1>
       <p class="text-base-content/70 text-sm mt-1">
-        Day grids from the community — what was dug on each tile, in order. Land IDs stay private.
+        Random anonymous day grids — shareable links, comments welcome. No land IDs are shown.
+        Load more for another random batch.
       </p>
     </div>
 
@@ -101,53 +95,41 @@ onMounted(loadInitial);
     </div>
 
     <template v-else-if="items.length">
-      <div v-for="group in groups" :key="group.day" class="space-y-3">
-        <div class="flex items-center gap-3">
-          <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
-            {{ formatDayLabel(group.day) }}
-          </h2>
-          <div class="flex-1 h-px bg-base-300" />
-          <span class="text-xs text-base-content/40">{{ group.items.length }}</span>
-        </div>
-        <ul class="space-y-3">
-          <li v-for="item in group.items" :key="item.id" class="card bg-base-200">
-            <div class="card-body py-4 flex flex-col sm:flex-row gap-4 sm:items-start">
-              <DigResultsGrid
-                :digs="item.digs"
-                compact
-                class="w-24 sm:w-28 shrink-0"
-              />
-              <div class="flex-1 min-w-0 space-y-2">
-                <div>
-                  <p class="font-semibold truncate">
-                    {{ item.displayName || "Desert dig" }}
-                  </p>
-                  <p class="text-sm text-base-content/60">
-                    {{ item.utcDate }}
-                    · {{ item.digCount }} digs
-                    <span v-if="treasureCount(item) > 0"> · {{ treasureCount(item) }} treasures</span>
-                    <span v-if="item.commentCount > 0"> · {{ item.commentCount }} comments</span>
-                  </p>
-                </div>
-                <ReactionBar
-                  :snapshot-id="item.id"
-                  :counts="item.reactions.counts"
-                  :user-emoji="item.reactions.userEmoji"
-                  :signed-in="signedIn"
-                  @update="applyReactionUpdate(item, $event)"
-                  @signin-required="showSignInHint"
-                />
+      <ul class="space-y-3">
+        <li v-for="item in items" :key="item.id" class="card bg-base-200">
+          <div class="card-body py-4 flex flex-col sm:flex-row gap-4 sm:items-start">
+            <DigResultsGrid
+              :digs="item.digs"
+              compact
+              class="w-24 sm:w-28 shrink-0"
+            />
+            <div class="flex-1 min-w-0 space-y-2">
+              <div>
+                <p class="font-semibold truncate">Desert dig</p>
+                <p class="text-sm text-base-content/60">
+                  {{ item.digCount }} digs
+                  <span v-if="treasureCount(item) > 0"> · {{ treasureCount(item) }} treasures</span>
+                  <span v-if="item.commentCount > 0"> · {{ item.commentCount }} comments</span>
+                </p>
               </div>
-              <RouterLink
-                :to="{ name: 'dig', params: { id: item.id } }"
-                class="btn btn-primary btn-sm shrink-0 self-start sm:self-center"
-              >
-                View grid
-              </RouterLink>
+              <ReactionBar
+                :snapshot-id="item.id"
+                :counts="item.reactions.counts"
+                :user-emoji="item.reactions.userEmoji"
+                :signed-in="signedIn"
+                @update="applyReactionUpdate(item, $event)"
+                @signin-required="showSignInHint"
+              />
             </div>
-          </li>
-        </ul>
-      </div>
+            <RouterLink
+              :to="{ name: 'dig', params: { id: item.id } }"
+              class="btn btn-primary btn-sm shrink-0 self-start sm:self-center"
+            >
+              View grid
+            </RouterLink>
+          </div>
+        </li>
+      </ul>
 
       <div v-if="error" class="alert alert-warning text-sm">
         <span>{{ error }}</span>
@@ -155,16 +137,16 @@ onMounted(loadInitial);
 
       <div class="flex justify-center pt-2">
         <button
-          v-if="nextCursor"
+          v-if="nextOffset != null"
           type="button"
           class="btn btn-outline btn-sm"
           :disabled="loadingMore"
           @click="loadMore"
         >
           <span v-if="loadingMore" class="loading loading-spinner loading-xs" />
-          {{ loadingMore ? "Loading..." : "Load more" }}
+          {{ loadingMore ? "Loading..." : "More random digs" }}
         </button>
-        <p v-else class="text-xs text-base-content/40">You've reached the end.</p>
+        <p v-else class="text-xs text-base-content/40">That's the batch for now.</p>
       </div>
     </template>
 

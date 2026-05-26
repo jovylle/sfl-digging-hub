@@ -143,11 +143,13 @@ export function rowToDigDay(row: SnapshotRow): DigDayPayload {
     ? (JSON.parse(row.mark_events_json) as MarkEvent[])
     : [];
   const visibleLandId = publicLandId(row.land_id);
+  const visibleDisplayName =
+    row.visibility === "public" ? null : row.display_name?.trim() || null;
   return {
     v: 1,
     landId: visibleLandId || "",
     utcDate: row.utc_date,
-    displayName: row.display_name,
+    displayName: visibleDisplayName,
     patterns: JSON.parse(row.patterns_json),
     digs: JSON.parse(row.digs_json) as DigEntry[],
     markEvents,
@@ -224,14 +226,10 @@ export async function saveDigDay(
   const now = merged.updatedAt || new Date().toISOString();
   const id = existingRow?.id ?? randomId();
 
-  const displayName =
-    merged.displayName?.trim().slice(0, 64) ||
-    existingRow?.display_name ||
-    null;
-
   const storedLandId = shouldHideLandId(merged.landId, merged.hideLandId)
     ? null
     : merged.landId;
+  const storedDisplayName = null;
 
   await db
     .prepare(
@@ -242,7 +240,7 @@ export async function saveDigDay(
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'public', NULL, NULL, ?, ?)
       ON CONFLICT(land_id_hash, utc_date) DO UPDATE SET
         land_id = excluded.land_id,
-        display_name = COALESCE(excluded.display_name, snapshots.display_name),
+        display_name = excluded.display_name,
         patterns_json = excluded.patterns_json,
         digs_json = excluded.digs_json,
         stats_json = excluded.stats_json,
@@ -255,7 +253,7 @@ export async function saveDigDay(
       merged.utcDate,
       storedLandId,
       landHash,
-      displayName,
+      storedDisplayName,
       JSON.stringify(merged.patterns ?? []),
       JSON.stringify(merged.digs),
       JSON.stringify(merged.stats ?? {}),

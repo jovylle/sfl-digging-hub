@@ -32,8 +32,12 @@ onMounted(loadSession);
         <RouterLink to="/community" class="btn btn-ghost btn-sm" active-class="btn-active">
           Community
         </RouterLink>
-        <RouterLink to="/journal" class="btn btn-ghost btn-sm" active-class="btn-active">
-          Journal
+        <RouterLink
+          :to="sessionInfo ? { name: 'profile', hash: '#lands' } : { name: 'profile' }"
+          class="btn btn-ghost btn-sm"
+          active-class="btn-active"
+        >
+          My Land Digs
         </RouterLink>
         <RouterLink to="/practice" class="btn btn-ghost btn-sm" active-class="btn-active">
           Practice

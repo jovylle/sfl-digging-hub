@@ -1,5 +1,7 @@
+import type { DigEntry } from "@sfl-digging-hub/shared";
 import type { UserRow } from "./auth";
-import { isValidLandId } from "./digDay";
+import { getTodayUTC, isValidLandId } from "./digDay";
+import { hashLandId } from "./snapshots";
 
 const NICKNAME_MAX_LEN = 30;
 
@@ -106,6 +108,62 @@ export async function handlePostSavedLand(
     { landId, savedAt, total: count?.c ?? 0 },
     { status: 201, headers: cors },
   );
+}
+
+export async function handleGetMyDigsToday(
+  db: D1Database,
+  user: UserRow,
+  hubBaseUrl: string,
+  cors: HeadersInit,
+): Promise<Response> {
+  const utcDate = getTodayUTC();
+  const savedRows = await db
+    .prepare(
+      "SELECT land_id FROM user_saved_lands WHERE user_id = ? ORDER BY saved_at DESC",
+    )
+    .bind(user.id)
+    .all<{ land_id: string }>();
+
+  const base = hubBaseUrl.replace(/\/$/, "");
+  const lands: {
+    landId: string;
+    snapshotId: string | null;
+    digCount: number;
+    digs: DigEntry[];
+    replayUrl: string | null;
+  }[] = [];
+
+  for (const { land_id: landId } of savedRows.results ?? []) {
+    const landHash = await hashLandId(landId);
+    const row = await db
+      .prepare(
+        "SELECT id, digs_json FROM snapshots WHERE land_id_hash = ? AND utc_date = ? LIMIT 1",
+      )
+      .bind(landHash, utcDate)
+      .first<{ id: string; digs_json: string }>();
+
+    if (row) {
+      const digs = JSON.parse(row.digs_json) as DigEntry[];
+      const digList = Array.isArray(digs) ? digs : [];
+      lands.push({
+        landId,
+        snapshotId: row.id,
+        digCount: digList.length,
+        digs: digList,
+        replayUrl: `${base}/dig/${row.id}`,
+      });
+    } else {
+      lands.push({
+        landId,
+        snapshotId: null,
+        digCount: 0,
+        digs: [],
+        replayUrl: null,
+      });
+    }
+  }
+
+  return Response.json({ utcDate, lands }, { status: 200, headers: cors });
 }
 
 export async function handleDeleteSavedLand(
