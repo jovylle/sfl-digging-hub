@@ -12,8 +12,9 @@ const props = withDefaults(
   defineProps<{
     digs: DigEntry[];
     compact?: boolean;
+    showOrder?: boolean;
   }>(),
-  { compact: false },
+  { compact: false, showOrder: false },
 );
 
 const cells = computed(() => buildDigResultsGrid(props.digs));
@@ -77,7 +78,7 @@ function iconUrl(cell: DigCellResult): string | null {
         decoding="async"
       />
       <span
-        v-else-if="cell.kind === 'empty' && cell.order"
+        v-else-if="props.showOrder && cell.kind === 'empty' && cell.order"
         class="text-base-content/35 font-bold"
         :class="props.compact ? 'text-[0.45rem]' : 'text-xs'"
       >
@@ -85,7 +86,7 @@ function iconUrl(cell: DigCellResult): string | null {
       </span>
 
       <span
-        v-if="cell.order"
+        v-if="props.showOrder && cell.order"
         class="absolute font-bold leading-none tabular-nums bg-base-100/90 text-base-content border border-base-content/20 shadow-sm"
         :class="
           props.compact

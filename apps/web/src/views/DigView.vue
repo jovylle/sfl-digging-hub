@@ -180,7 +180,7 @@ watch(() => props.id, load);
       </p>
     </header>
 
-    <DigResultsGrid :digs="snapshot.digs" />
+    <DigResultsGrid :digs="snapshot.digs" show-order />
 
     <div v-if="loot" class="card bg-base-200 max-w-md mx-auto w-full">
       <div class="card-body py-4 text-sm space-y-2">
