@@ -85,7 +85,7 @@ onMounted(loadInitial);
     <div>
       <h1 class="text-2xl font-bold text-primary">Community</h1>
       <p class="text-base-content/70 text-sm mt-1">
-        Day grids by land ID — what was dug on each tile, in order. Not replays.
+        Day grids from the community — what was dug on each tile, in order. Land IDs stay private.
       </p>
     </div>
 
@@ -120,11 +120,10 @@ onMounted(loadInitial);
               <div class="flex-1 min-w-0 space-y-2">
                 <div>
                   <p class="font-semibold truncate">
-                    {{ item.displayName || (item.landId ? `Land ${item.landId}` : "Desert dig") }}
+                    {{ item.displayName || "Desert dig" }}
                   </p>
                   <p class="text-sm text-base-content/60">
                     {{ item.utcDate }}
-                    <span v-if="item.landId"> · Land {{ item.landId }}</span>
                     · {{ item.digCount }} digs
                     <span v-if="treasureCount(item) > 0"> · {{ treasureCount(item) }} treasures</span>
                     <span v-if="item.commentCount > 0"> · {{ item.commentCount }} comments</span>

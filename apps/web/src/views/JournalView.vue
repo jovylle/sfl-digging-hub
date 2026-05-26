@@ -2,7 +2,6 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { loadJournalLandId, saveJournalLandId } from "@/api/client";
-import { isTestnetLandId, testnetLandHubMessage } from "@/utils/testnet";
 import { D1G_LABEL } from "@/utils/d1gUrl";
 
 const router = useRouter();
@@ -13,10 +12,6 @@ function goToLand() {
   const id = landId.value.trim();
   if (!id) {
     error.value = "Land ID is required";
-    return;
-  }
-  if (isTestnetLandId(id)) {
-    error.value = testnetLandHubMessage(id);
     return;
   }
   error.value = null;

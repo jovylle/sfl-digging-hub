@@ -117,7 +117,7 @@ onMounted(async () => {
             <DigResultsGrid :digs="item.digs" compact class="w-full" />
             <div class="min-w-0">
               <p class="font-semibold text-sm truncate">
-                {{ item.displayName || (item.landId ? `Land ${item.landId}` : "Desert dig") }}
+                {{ item.displayName || "Desert dig" }}
               </p>
               <p class="text-xs text-base-content/60">
                 {{ item.digCount }} digs

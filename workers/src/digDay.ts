@@ -1,5 +1,4 @@
 import type { DigEntry } from "@sfl-digging-hub/shared";
-import { isTestnetLandId, testnetLandHubMessage } from "@sfl-digging-hub/shared";
 import { randomId } from "./crypto";
 import { hashLandId, type SnapshotRow } from "./snapshots";
 
@@ -15,6 +14,8 @@ export type DigDayPayload = {
   v?: number;
   landId: string;
   utcDate: string;
+  /** When true, land_id is not stored or returned on public hub views (lookup still uses landId hash). */
+  hideLandId?: boolean;
   displayName?: string | null;
   patterns?: unknown[];
   digs: DigEntry[];
@@ -42,10 +43,18 @@ export function isValidLandId(landId: string): boolean {
   );
 }
 
-/** Testnet farms are used on d1g.uk with ?testnet only — not stored on the hub. */
-export function testnetLandError(landId: string): string | null {
-  if (!isTestnetLandId(landId)) return null;
-  return testnetLandHubMessage(landId);
+/** Public hub views never expose raw land IDs (lookup uses land_id_hash). */
+export function shouldHideLandId(
+  _landId: string,
+  _hideLandId?: boolean,
+): boolean {
+  return true;
+}
+
+export function publicLandId(
+  landId: string | null | undefined,
+): string | null {
+  return landId?.trim() ? landId : null;
 }
 
 export function emptyDigDay(landId: string, utcDate: string): DigDayPayload {
@@ -106,6 +115,7 @@ export function mergeDigDay(
     v: 1,
     landId,
     utcDate,
+    hideLandId: shouldHideLandId(landId, incoming.hideLandId ?? base.hideLandId),
     displayName: incoming.displayName?.trim() || base.displayName || null,
     patterns: replaceDigs
       ? [...(incoming.patterns || [])]
@@ -132,9 +142,10 @@ export function rowToDigDay(row: SnapshotRow): DigDayPayload {
   const markEvents = row.mark_events_json
     ? (JSON.parse(row.mark_events_json) as MarkEvent[])
     : [];
+  const visibleLandId = publicLandId(row.land_id);
   return {
     v: 1,
-    landId: row.land_id || "",
+    landId: visibleLandId || "",
     utcDate: row.utc_date,
     displayName: row.display_name,
     patterns: JSON.parse(row.patterns_json),
@@ -174,9 +185,8 @@ export function validateDigDayBody(body: unknown): DigDayPayload | string {
   if (!body || typeof body !== "object") return "Invalid JSON body";
   const b = body as Record<string, unknown>;
   const landId = String(b.landId || "");
-  const testnetErr = testnetLandError(landId);
-  if (testnetErr) return testnetErr;
   if (!isValidLandId(landId)) return "Invalid landId";
+  const hideLandId = shouldHideLandId(landId);
   const utcDate = parseUTCDate(b.utcDate);
   if (!Array.isArray(b.digs)) return "digs must be an array";
 
@@ -187,6 +197,7 @@ export function validateDigDayBody(body: unknown): DigDayPayload | string {
     v: 1,
     landId,
     utcDate,
+    hideLandId,
     displayName: displayName || null,
     patterns: Array.isArray(b.patterns) ? b.patterns : [],
     digs: b.digs as DigEntry[],
@@ -218,6 +229,10 @@ export async function saveDigDay(
     existingRow?.display_name ||
     null;
 
+  const storedLandId = shouldHideLandId(merged.landId, merged.hideLandId)
+    ? null
+    : merged.landId;
+
   await db
     .prepare(
       `INSERT INTO snapshots (
@@ -238,7 +253,7 @@ export async function saveDigDay(
     .bind(
       id,
       merged.utcDate,
-      merged.landId,
+      storedLandId,
       landHash,
       displayName,
       JSON.stringify(merged.patterns ?? []),
@@ -254,8 +269,9 @@ export async function saveDigDay(
   if (!row) throw new Error("Failed to persist dig day");
 
   const base = hubBaseUrl.replace(/\/$/, "");
+  const response = rowToDigDay(row);
   return {
-    ...merged,
+    ...response,
     id: row.id,
     replayUrl: `${base}/dig/${row.id}`,
   };
