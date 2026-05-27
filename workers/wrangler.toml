@@ -16,7 +16,7 @@ type = "Data"
 globs = ["**/*.ttf"]
 fallthrough = true
 
-# account_id = "7f0e409fd621476eb621ef4c9a436374"
+account_id = "7f0e409fd621476eb621ef4c9a436374"
 
 [[d1_databases]]
 binding = "DB"
