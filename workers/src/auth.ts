@@ -6,6 +6,7 @@ const AUTH_TOKEN_ISSUER = "sfl-digging-hub";
 const AUTH_TOKEN_AUDIENCE = "d1g.uk";
 const OTP_TTL_MINUTES = 10;
 const OTP_MAX_ATTEMPTS = 6;
+const APPROVAL_TTL_MINUTES = 10;
 
 const NICKNAME_ADJECTIVES = [
   "Sandy", "Dusty", "Lucky", "Golden", "Swift", "Bold", "Rusty", "Wild",
@@ -728,4 +729,290 @@ export async function checkRateLimit(
     .bind(scope, key, windowStart)
     .run();
   return true;
+}
+
+export type EmailApprovalStartResult = {
+  requestId: string;
+  challengeId: string;
+  flowId: string;
+  expiresAt: string;
+  status: "pending";
+};
+
+type ApprovalLookupRow = {
+  id: string;
+  email: string;
+  challenge_id: string;
+  flow_id: string;
+  expires_at: string;
+  approved_at: string | null;
+  session_consumed_at: string | null;
+};
+
+async function getLatestEmailApprovalForEmail(
+  db: D1Database,
+  email: string,
+): Promise<ApprovalLookupRow | null> {
+  const normalized = normalizeEmail(email);
+  return (
+    (await db
+      .prepare(
+        `SELECT id, email, challenge_id, flow_id, expires_at, approved_at, session_consumed_at
+         FROM auth_email_approvals
+         WHERE email = ?
+         ORDER BY created_at DESC
+         LIMIT 1`,
+      )
+      .bind(normalized)
+      .first<ApprovalLookupRow>()) ?? null
+  );
+}
+
+export async function createEmailApprovalRequest(
+  db: D1Database,
+  email: string,
+  options: {
+    returnUrl: string | null;
+    ipHash: string;
+  },
+): Promise<EmailApprovalStartResult & { approveToken: string }> {
+  const normalized = normalizeEmail(email);
+  const requestId = crypto.randomUUID();
+  const challengeId = crypto.randomUUID();
+  const flowId = crypto.randomUUID();
+  const approveToken = randomToken();
+  const tokenHash = await sha256Hex(`approve:${requestId}:${approveToken}`);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + APPROVAL_TTL_MINUTES * 60_000).toISOString();
+  const createdAt = now.toISOString();
+
+  await db
+    .prepare(
+      `INSERT INTO auth_email_approvals (
+        id, email, challenge_id, flow_id, token_hash, return_url,
+        expires_at, approved_at, approval_consumed_at, session_consumed_at,
+        request_ip_hash, approved_ip_hash, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, ?, ?)`,
+    )
+    .bind(
+      requestId,
+      normalized,
+      challengeId,
+      flowId,
+      tokenHash,
+      options.returnUrl,
+      expiresAt,
+      options.ipHash,
+      createdAt,
+      createdAt,
+    )
+    .run();
+
+  return {
+    requestId,
+    challengeId,
+    flowId,
+    expiresAt,
+    status: "pending",
+    approveToken,
+  };
+}
+
+export async function approveEmailRequestByLink(
+  db: D1Database,
+  options: {
+    requestId: string;
+    email: string;
+    approveToken: string;
+    approvedIpHash: string;
+  },
+): Promise<{ ok: boolean; returnUrl: string | null; reason?: "invalid" | "expired" }> {
+  const normalized = normalizeEmail(options.email);
+  const tokenHash = await sha256Hex(`approve:${options.requestId}:${options.approveToken}`);
+  const row = await db
+    .prepare(
+      `SELECT id, expires_at, approved_at, approval_consumed_at, return_url
+       FROM auth_email_approvals
+       WHERE id = ? AND email = ? AND token_hash = ?`,
+    )
+    .bind(options.requestId, normalized, tokenHash)
+    .first<{
+      id: string;
+      expires_at: string;
+      approved_at: string | null;
+      approval_consumed_at: string | null;
+      return_url: string | null;
+    }>();
+  if (!row) return { ok: false, returnUrl: null, reason: "invalid" };
+
+  if (
+    new Date(row.expires_at).getTime() <= Date.now() ||
+    row.approval_consumed_at ||
+    row.approved_at
+  ) {
+    return { ok: false, returnUrl: row.return_url ?? null, reason: "expired" };
+  }
+
+  const now = new Date().toISOString();
+  const result = await db
+    .prepare(
+      `UPDATE auth_email_approvals
+       SET approved_at = ?, approval_consumed_at = ?, approved_ip_hash = ?, updated_at = ?
+       WHERE id = ? AND approved_at IS NULL AND approval_consumed_at IS NULL`,
+    )
+    .bind(now, now, options.approvedIpHash, now, row.id)
+    .run();
+  if ((result.meta.changes ?? 0) < 1) {
+    return { ok: false, returnUrl: row.return_url ?? null, reason: "expired" };
+  }
+  return { ok: true, returnUrl: row.return_url ?? null };
+}
+
+export async function getEmailApprovalStatus(
+  db: D1Database,
+  options: {
+    email: string;
+    requestId?: string;
+    challengeId?: string;
+    flowId?: string;
+  },
+): Promise<
+  | {
+      status: "pending";
+      requestId: string;
+      challengeId: string;
+      flowId: string;
+      expiresAt: string;
+    }
+  | {
+      status: "approved";
+      requestId: string;
+      challengeId: string;
+      flowId: string;
+      expiresAt: string;
+    }
+  | {
+      status: "expired";
+      requestId: string;
+    }
+  | {
+      status: "consumed";
+      requestId: string;
+    }
+  | {
+      status: "none";
+    }
+> {
+  const normalized = normalizeEmail(options.email);
+  let row: ApprovalLookupRow | null = null;
+
+  if (options.requestId) {
+    row =
+      (await db
+        .prepare(
+          `SELECT id, email, challenge_id, flow_id, expires_at, approved_at, session_consumed_at
+           FROM auth_email_approvals
+           WHERE id = ? AND email = ?
+           LIMIT 1`,
+        )
+        .bind(options.requestId, normalized)
+        .first<ApprovalLookupRow>()) ?? null;
+  } else if (options.challengeId) {
+    row =
+      (await db
+        .prepare(
+          `SELECT id, email, challenge_id, flow_id, expires_at, approved_at, session_consumed_at
+           FROM auth_email_approvals
+           WHERE challenge_id = ? AND email = ?
+           ORDER BY created_at DESC
+           LIMIT 1`,
+        )
+        .bind(options.challengeId, normalized)
+        .first<ApprovalLookupRow>()) ?? null;
+  } else if (options.flowId) {
+    row =
+      (await db
+        .prepare(
+          `SELECT id, email, challenge_id, flow_id, expires_at, approved_at, session_consumed_at
+           FROM auth_email_approvals
+           WHERE flow_id = ? AND email = ?
+           ORDER BY created_at DESC
+           LIMIT 1`,
+        )
+        .bind(options.flowId, normalized)
+        .first<ApprovalLookupRow>()) ?? null;
+  } else {
+    row = await getLatestEmailApprovalForEmail(db, normalized);
+  }
+
+  if (!row) return { status: "none" };
+  if (new Date(row.expires_at).getTime() <= Date.now()) {
+    return { status: "expired", requestId: row.id };
+  }
+  if (row.session_consumed_at) {
+    return { status: "consumed", requestId: row.id };
+  }
+  if (!row.approved_at) {
+    return {
+      status: "pending",
+      requestId: row.id,
+      challengeId: row.challenge_id,
+      flowId: row.flow_id,
+      expiresAt: row.expires_at,
+    };
+  }
+  return {
+    status: "approved",
+    requestId: row.id,
+    challengeId: row.challenge_id,
+    flowId: row.flow_id,
+    expiresAt: row.expires_at,
+  };
+}
+
+export async function consumeEmailApprovalSession(
+  db: D1Database,
+  requestId: string,
+): Promise<boolean> {
+  const now = new Date().toISOString();
+  const result = await db
+    .prepare(
+      `UPDATE auth_email_approvals
+       SET session_consumed_at = ?, updated_at = ?
+       WHERE id = ? AND approved_at IS NOT NULL AND session_consumed_at IS NULL`,
+    )
+    .bind(now, now, requestId)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
+export async function sendApprovalEmail(
+  email: string,
+  approveUrl: string,
+  options: {
+    from?: string;
+    resendApiKey?: string;
+  },
+): Promise<void> {
+  if (!options.resendApiKey || !options.from) {
+    console.log(`Approval email provider not configured; link for ${email}: ${approveUrl}`);
+    return;
+  }
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${options.resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: options.from,
+      to: [email],
+      subject: "Approve sign in to d1g.uk",
+      text: `Open this link to approve sign in: ${approveUrl}\n\nThis link expires in ${APPROVAL_TTL_MINUTES} minutes.`,
+    }),
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => "unknown");
+    throw new Error(`Failed to send approval email (${response.status}): ${body}`);
+  }
 }

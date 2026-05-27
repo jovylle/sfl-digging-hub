@@ -7,17 +7,22 @@ import type {
 } from "@sfl-digging-hub/shared";
 import { isReactionEmoji } from "@sfl-digging-hub/shared";
 import {
+  approveEmailRequestByLink,
   buildGoogleAuthorizeUrl,
   checkRateLimit,
   claimAnonymousActivityForUser,
+  consumeEmailApprovalSession,
   createAndStoreEmailOtp,
+  createEmailApprovalRequest,
   createGoogleOAuthState,
   exchangeGoogleCodeForIdentity,
   findOrCreateUserForProvider,
+  getEmailApprovalStatus,
   getUserFromSession,
   getPublicAuthUser,
   issueAuthToken,
   revokeJwtFromRequest,
+  sendApprovalEmail,
   sendOtpEmail,
   sessionTokenFromRequest,
   verifyGoogleIdToken,
@@ -178,6 +183,32 @@ function isAllowedAuthReturnUrl(value: string): boolean {
   }
 }
 
+function isEmailApproveStartPath(path: string): boolean {
+  return (
+    path === "/v1/auth/approve/start" ||
+    path === "/v1/auth/magic/start" ||
+    path === "/v1/auth/magic-link/start"
+  );
+}
+
+function isEmailApproveCheckPath(path: string): boolean {
+  return (
+    path === "/v1/auth/approve/check" ||
+    path === "/v1/auth/approve/complete" ||
+    path === "/v1/auth/magic/check" ||
+    path === "/v1/auth/magic/complete" ||
+    path === "/v1/auth/magic-link/verify"
+  );
+}
+
+function isEmailApproveCompletePath(path: string): boolean {
+  return (
+    path === "/v1/auth/approve/complete" ||
+    path === "/v1/auth/magic/complete" ||
+    path === "/v1/auth/magic-link/verify"
+  );
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const allowed = parseAllowedOrigins(env.CORS_ORIGINS);
@@ -315,6 +346,157 @@ export default {
 
         // Always return ok to avoid account enumeration.
         return json({ ok: true }, 200, cors);
+      }
+
+      if (isEmailApproveStartPath(path) && request.method === "POST") {
+        const body = (await request.json().catch(() => null)) as {
+          email?: string;
+          anonymousId?: string;
+          returnUrl?: string;
+        } | null;
+        const email = (body?.email ?? "").trim().toLowerCase();
+        const returnUrlRaw = (body?.returnUrl ?? "").trim();
+        const returnUrl =
+          returnUrlRaw && isAllowedAuthReturnUrl(returnUrlRaw) ? returnUrlRaw : null;
+        if (!isValidEmail(email)) {
+          return error("Invalid email", 400, cors);
+        }
+        if (returnUrlRaw && !returnUrl) {
+          return error("Invalid returnUrl", 400, cors);
+        }
+
+        const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+        const emailHash = await sha256Hex(`approve-email:${email}`);
+        const ipHash = await sha256Hex(`approve-ip:${ip}`);
+        const pairHash = await sha256Hex(`approve-ip-email:${ip}:${email}`);
+        const [ipOk, emailOk, pairOk] = await Promise.all([
+          checkRateLimit(env.DB, "approve_start_ip", ipHash, 20, 60),
+          checkRateLimit(env.DB, "approve_start_email", emailHash, 8, 10 * 60),
+          checkRateLimit(env.DB, "approve_start_pair", pairHash, 5, 10 * 60),
+        ]);
+        if (!ipOk || !emailOk || !pairOk) {
+          return error("Too many requests. Please try again shortly.", 429, cors);
+        }
+
+        const started = await createEmailApprovalRequest(env.DB, email, {
+          returnUrl,
+          ipHash,
+        });
+        const apiBase = (env.API_BASE_URL ?? `${url.protocol}//${url.host}`).replace(/\/$/, "");
+        const approveLink = new URL(`${apiBase}/v1/auth/approve/complete`);
+        approveLink.searchParams.set("requestId", started.requestId);
+        approveLink.searchParams.set("email", email);
+        approveLink.searchParams.set("token", started.approveToken);
+        await sendApprovalEmail(email, approveLink.toString(), {
+          from: env.OTP_EMAIL_FROM,
+          resendApiKey: env.OTP_RESEND_API_KEY,
+        });
+        return json(
+          {
+            requestId: started.requestId,
+            challengeId: started.challengeId,
+            flowId: started.flowId,
+            expiresAt: started.expiresAt,
+            status: "pending",
+          },
+          200,
+          cors,
+        );
+      }
+
+      if (isEmailApproveCompletePath(path) && request.method === "GET") {
+        const requestId = String(url.searchParams.get("requestId") ?? "").trim();
+        const email = String(url.searchParams.get("email") ?? "").trim().toLowerCase();
+        const token = String(url.searchParams.get("token") ?? "").trim();
+        if (!requestId || !email || !token || !isValidEmail(email)) {
+          return error("Invalid approval link", 400, cors);
+        }
+
+        const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+        const approvedIpHash = await sha256Hex(`approve-ip:${ip}`);
+        const approved = await approveEmailRequestByLink(env.DB, {
+          requestId,
+          email,
+          approveToken: token,
+          approvedIpHash,
+        });
+
+        const fallbackReturn = `${hubBase.replace(/\/$/, "")}/`;
+        const safeReturnUrl =
+          approved.returnUrl && isAllowedAuthReturnUrl(approved.returnUrl)
+            ? approved.returnUrl
+            : fallbackReturn;
+        const target = new URL(safeReturnUrl);
+        target.searchParams.set("authApprove", approved.ok ? "approved" : "invalid");
+        target.searchParams.set("requestId", requestId);
+        if (!approved.ok && approved.reason) {
+          target.searchParams.set("reason", approved.reason);
+        }
+        return Response.redirect(target.toString(), 302);
+      }
+
+      if (isEmailApproveCheckPath(path) && request.method === "POST") {
+        if (!env.JWT_SECRET) return error("Auth is not configured", 500, cors);
+        const body = (await request.json().catch(() => null)) as {
+          email?: string;
+          requestId?: string;
+          anonymousId?: string;
+          challengeId?: string;
+          flowId?: string;
+        } | null;
+        const email = (body?.email ?? "").trim().toLowerCase();
+        if (!isValidEmail(email)) {
+          return error("Invalid email", 400, cors);
+        }
+
+        const approval = await getEmailApprovalStatus(env.DB, {
+          email,
+          requestId: body?.requestId,
+          challengeId: body?.challengeId,
+          flowId: body?.flowId,
+        });
+        if (approval.status === "none" || approval.status === "pending") {
+          return json(
+            {
+              status: "pending",
+              requestId: approval.status === "pending" ? approval.requestId : body?.requestId ?? null,
+              challengeId: approval.status === "pending" ? approval.challengeId : body?.challengeId ?? null,
+              flowId: approval.status === "pending" ? approval.flowId : body?.flowId ?? null,
+              expiresAt: approval.status === "pending" ? approval.expiresAt : null,
+            },
+            200,
+            cors,
+          );
+        }
+        if (approval.status === "expired") {
+          return error("Approval request expired. Please start again.", 409, cors);
+        }
+        if (approval.status === "consumed") {
+          return error("Approval request already used. Please start again.", 409, cors);
+        }
+
+        const user = await findOrCreateUserForProvider(env.DB, email, "email", email);
+        const token = await issueAuthToken(env.DB, user, env.JWT_SECRET);
+        const consumed = await consumeEmailApprovalSession(env.DB, approval.requestId);
+        if (!consumed) {
+          return error("Approval request already used. Please start again.", 409, cors);
+        }
+        const claimed = await claimAnonymousActivityForUser(env.DB, user.id, body?.anonymousId);
+        const authUser = await getPublicAuthUser(env.DB, user);
+        return json(
+          {
+            status: "approved",
+            requestId: approval.requestId,
+            challengeId: approval.challengeId,
+            flowId: approval.flowId,
+            token,
+            accessToken: token,
+            user: authUser,
+            claimed,
+          },
+          200,
+          cors,
+        );
       }
 
       if (path === "/v1/auth/otp/verify" && request.method === "POST") {
