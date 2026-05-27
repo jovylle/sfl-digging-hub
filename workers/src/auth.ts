@@ -194,6 +194,9 @@ async function ensureAuthProvider(
   userId: string,
   provider: AuthProvider,
   providerSubject: string,
+  options?: {
+    legacySubjects?: string[];
+  },
 ): Promise<void> {
   const bySubject = await db
     .prepare(
@@ -214,6 +217,18 @@ async function ensureAuthProvider(
     .bind(userId, provider)
     .first<{ provider_subject: string | null }>();
   if (byUser?.provider_subject && byUser.provider_subject !== providerSubject) {
+    const legacySubjects = new Set((options?.legacySubjects ?? []).filter(Boolean));
+    if (legacySubjects.has(byUser.provider_subject)) {
+      await db
+        .prepare(
+          `UPDATE auth_providers
+           SET provider_subject = ?
+           WHERE user_id = ? AND provider = ?`,
+        )
+        .bind(providerSubject, userId, provider)
+        .run();
+      return;
+    }
     throw new AuthConflictError(
       "Your account is already linked to a different identity for this provider.",
     );
@@ -537,7 +552,11 @@ export async function findOrCreateUserForProvider(
   if (!user) {
     user = await findOrCreateUser(db, normalized);
   }
-  await ensureAuthProvider(db, user.id, provider, providerSubject);
+  await ensureAuthProvider(db, user.id, provider, providerSubject, {
+    // Legacy Google sign-ins used email as provider_subject. Allow transparent
+    // one-time upgrade to the stable Google subject when the same user signs in.
+    legacySubjects: provider === "google" ? [normalized] : [],
+  });
   return user;
 }
 
