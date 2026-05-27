@@ -12,6 +12,7 @@ import {
   startEmailApproveSignIn,
   type SessionInfo,
 } from "@/api/client";
+import GoogleSignIn from "@/components/GoogleSignIn.vue";
 import { D1G_BASE_URL, D1G_LABEL } from "@/utils/d1gUrl";
 
 const sessionInfo = ref<SessionInfo | null>(null);
@@ -110,6 +111,11 @@ async function startSignIn() {
   } catch (e) {
     signInError.value = e instanceof Error ? e.message : "Failed to start sign-in.";
   }
+}
+
+async function onGoogleSignedIn() {
+  await loadSession();
+  closeSignInModal();
 }
 
 onMounted(loadSession);
@@ -230,6 +236,10 @@ onBeforeUnmount(clearSignInPoll);
           <span v-if="signInExpiresAt">Expires at {{ signInExpiresAt }}.</span>
         </p>
         <p v-if="signInError" class="text-error text-xs mt-2">{{ signInError }}</p>
+
+        <div class="divider text-xs text-base-content/50 my-4">or</div>
+        <p class="text-sm text-base-content/70 mb-2">Continue with Google</p>
+        <GoogleSignIn @signed-in="onGoogleSignedIn" />
       </div>
     </div>
   </div>
