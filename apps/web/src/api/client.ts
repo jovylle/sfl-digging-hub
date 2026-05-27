@@ -204,6 +204,56 @@ export function signOut(): void {
   setSessionToken(null);
 }
 
+export type EmailApproveStartResponse = {
+  requestId: string;
+  challengeId?: string;
+  flowId?: string;
+  expiresAt?: string;
+  status: "pending";
+};
+
+export type EmailApproveCheckResponse =
+  | {
+      status: "pending";
+      requestId?: string | null;
+      challengeId?: string | null;
+      flowId?: string | null;
+      expiresAt?: string | null;
+    }
+  | {
+      status: "approved";
+      requestId: string;
+      challengeId?: string;
+      flowId?: string;
+      token?: string;
+      accessToken?: string;
+      user?: unknown;
+    };
+
+export function startEmailApproveSignIn(body: {
+  email: string;
+  anonymousId?: string;
+  returnUrl?: string;
+}): Promise<EmailApproveStartResponse> {
+  return request("/v1/auth/approve/start", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function checkEmailApproveSignIn(body: {
+  email: string;
+  requestId?: string;
+  anonymousId?: string;
+  challengeId?: string;
+  flowId?: string;
+}): Promise<EmailApproveCheckResponse> {
+  return request("/v1/auth/approve/check", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function submitPracticeRun(
   body: Omit<PracticeRunPayload, "anonymousId">,
 ): Promise<PracticeLeaderboardEntry> {
