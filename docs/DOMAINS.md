@@ -84,6 +84,11 @@ Set on **each** Worker in Cloudflare (or `workers/.dev.vars` locally):
 
 - `HUB_WRITE_SECRET` — shared with Netlify on d1g.uk (dig-day proxy)
 - `GOOGLE_CLIENT_ID` — also in `wrangler.toml` / `packages/shared/src/googleOAuth.ts` (public)
+- `GOOGLE_CLIENT_SECRET` — server-side Google OAuth code exchange secret
+- `GOOGLE_REDIRECT_URI` — callback URL (`https://beta.api.d1g.uk/v1/auth/google/callback` or prod)
+- `JWT_SECRET` — signs Bearer JWT returned by `/v1/auth/otp/verify` and Google auth
+- `OTP_RESEND_API_KEY` — API key for OTP email delivery (Resend)
+- `OTP_EMAIL_FROM` — sender identity for OTP email, e.g. `Digging Hub <auth@d1g.uk>`
 
 ---
 

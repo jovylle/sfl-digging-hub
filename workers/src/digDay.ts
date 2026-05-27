@@ -221,6 +221,7 @@ export async function saveDigDay(
   db: D1Database,
   incoming: DigDayPayload,
   hubBaseUrl: string,
+  userId?: string | null,
 ): Promise<DigDayPayload & { id: string; replayUrl: string }> {
   const existingRow = await getDigDayRow(db, incoming.landId, incoming.utcDate);
   const existing = existingRow ? rowToDigDay(existingRow) : null;
@@ -239,9 +240,9 @@ export async function saveDigDay(
     .prepare(
       `INSERT INTO snapshots (
         id, utc_date, land_id, land_id_hash, display_name, patterns_json, digs_json,
-        stats_json, marks_json, mark_events_json, visibility, screenshot_key,
+        stats_json, marks_json, mark_events_json, visibility, user_id, screenshot_key,
         edit_token_hash, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'public', NULL, NULL, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'public', ?, NULL, NULL, ?, ?)
       ON CONFLICT(land_id_hash, utc_date) DO UPDATE SET
         land_id = excluded.land_id,
         display_name = excluded.display_name,
@@ -250,6 +251,7 @@ export async function saveDigDay(
         stats_json = excluded.stats_json,
         mark_events_json = excluded.mark_events_json,
         visibility = 'public',
+        user_id = COALESCE(excluded.user_id, snapshots.user_id),
         updated_at = excluded.updated_at`,
     )
     .bind(
@@ -262,6 +264,7 @@ export async function saveDigDay(
       JSON.stringify(merged.digs),
       JSON.stringify(merged.stats ?? {}),
       JSON.stringify(merged.markEvents ?? []),
+      userId ?? null,
       existingRow?.created_at ?? now,
       now,
     )

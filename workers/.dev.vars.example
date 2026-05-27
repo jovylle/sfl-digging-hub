@@ -1,3 +1,7 @@
 # Copy to workers/.dev.vars for local wrangler dev
 HUB_WRITE_SECRET=dev-secret-change-me
 # GOOGLE_CLIENT_ID is in wrangler.toml [vars]; override here only if needed
+JWT_SECRET=dev-super-secret-change-me
+GOOGLE_CLIENT_SECRET=replace-with-google-client-secret
+OTP_RESEND_API_KEY=re_XXXXXXXXXXXXXXXXXXXXXXXX
+OTP_EMAIL_FROM=Digging Hub <auth@d1g.uk>

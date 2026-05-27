@@ -7,12 +7,22 @@ import type {
 } from "@sfl-digging-hub/shared";
 import { isReactionEmoji } from "@sfl-digging-hub/shared";
 import {
-  claimCommentsForUser,
-  createSession,
-  findOrCreateUser,
+  buildGoogleAuthorizeUrl,
+  checkRateLimit,
+  claimAnonymousActivityForUser,
+  createAndStoreEmailOtp,
+  createGoogleOAuthState,
+  exchangeGoogleCodeForIdentity,
+  findOrCreateUserForProvider,
   getUserFromSession,
+  getPublicAuthUser,
+  issueAuthToken,
+  revokeJwtFromRequest,
+  sendOtpEmail,
   sessionTokenFromRequest,
   verifyGoogleIdToken,
+  verifyGoogleOAuthState,
+  verifyEmailOtp,
 } from "./auth";
 import { corsHeaders, parseAllowedOrigins } from "./cors";
 import { randomId, sha256Hex } from "./crypto";
@@ -68,6 +78,11 @@ export interface Env {
   API_BASE_URL?: string;
   HUB_WRITE_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_REDIRECT_URI?: string;
+  JWT_SECRET?: string;
+  OTP_EMAIL_FROM?: string;
+  OTP_RESEND_API_KEY?: string;
 }
 
 type CommentRow = {
@@ -136,6 +151,33 @@ async function checkCommentRate(db: D1Database, ipHash: string): Promise<boolean
   return true;
 }
 
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isAllowedAuthReturnUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+    const host = url.hostname.toLowerCase();
+    if (host === "d1g.uk" || host === "beta.d1g.uk" || host === "development.d1g.uk") {
+      return true;
+    }
+    if (host === "hub.d1g.uk" || host === "beta.hub.d1g.uk") {
+      return true;
+    }
+    if (host === "localhost" || host === "127.0.0.1") {
+      return true;
+    }
+    if (/^[a-z0-9-]+--[a-z0-9-]+\.netlify\.app$/i.test(host)) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const allowed = parseAllowedOrigins(env.CORS_ORIGINS);
@@ -194,11 +236,16 @@ export default {
         if (!verifyWriteSecret(request, env.HUB_WRITE_SECRET)) {
           return error("Unauthorized", 401, cors);
         }
+        const sessionUser = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+          env.JWT_SECRET,
+        );
         const raw = await request.json().catch(() => null);
         const validated = validateDigDayBody(raw);
         if (typeof validated === "string") return error(validated, 400, cors);
         try {
-          const saved = await saveDigDay(env.DB, validated, hubBase);
+          const saved = await saveDigDay(env.DB, validated, hubBase, sessionUser?.id ?? null);
           return json(saved, 200, { ...cors, "Cache-Control": "no-store" });
         } catch (e) {
           const err = e as Error & { statusCode?: number };
@@ -213,7 +260,11 @@ export default {
         if (!isValidLandId(landId)) {
           return error("Invalid landId", 400, cors);
         }
-        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        const user = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+          env.JWT_SECRET,
+        );
         if (!user) return error("Not signed in", 401, cors);
         const saved = await env.DB
           .prepare(
@@ -239,7 +290,105 @@ export default {
         return json({ landId, utcDate, days }, 200, cors);
       }
 
+      if (path === "/v1/auth/otp/send" && request.method === "POST") {
+        const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+        const body = (await request.json().catch(() => null)) as { email?: string } | null;
+        const email = (body?.email ?? "").trim().toLowerCase();
+
+        if (email && isValidEmail(email)) {
+          const emailHash = await sha256Hex(`otp-email:${email}`);
+          const ipHash = await sha256Hex(`otp-ip:${ip}`);
+          const keyHash = await sha256Hex(`otp-ip-email:${ip}:${email}`);
+          const [ipOk, emailOk, comboOk] = await Promise.all([
+            checkRateLimit(env.DB, "otp_send_ip", ipHash, 20, 60),
+            checkRateLimit(env.DB, "otp_send_email", emailHash, 8, 10 * 60),
+            checkRateLimit(env.DB, "otp_send_pair", keyHash, 5, 10 * 60),
+          ]);
+          if (ipOk && emailOk && comboOk) {
+            const code = await createAndStoreEmailOtp(env.DB, email, ipHash);
+            await sendOtpEmail(email, code, {
+              from: env.OTP_EMAIL_FROM,
+              resendApiKey: env.OTP_RESEND_API_KEY,
+            });
+          }
+        }
+
+        // Always return ok to avoid account enumeration.
+        return json({ ok: true }, 200, cors);
+      }
+
+      if (path === "/v1/auth/otp/verify" && request.method === "POST") {
+        if (!env.JWT_SECRET) return error("Auth is not configured", 500, cors);
+        const body = (await request.json().catch(() => null)) as {
+          email?: string;
+          code?: string;
+          anonymousId?: string;
+        } | null;
+        const email = (body?.email ?? "").trim().toLowerCase();
+        const code = (body?.code ?? "").trim();
+        if (!isValidEmail(email) || !/^\d{6}$/.test(code)) {
+          return error("Invalid email or code", 400, cors);
+        }
+        const ok = await verifyEmailOtp(env.DB, email, code);
+        if (!ok) return error("Invalid or expired code", 401, cors);
+        const user = await findOrCreateUserForProvider(env.DB, email, "email", email);
+        const token = await issueAuthToken(env.DB, user, env.JWT_SECRET);
+        const claimed = await claimAnonymousActivityForUser(
+          env.DB,
+          user.id,
+          body?.anonymousId,
+        );
+        const authUser = await getPublicAuthUser(env.DB, user);
+        return json({ token, user: authUser, claimed }, 200, cors);
+      }
+
+      if (path === "/v1/auth/google/start" && request.method === "GET") {
+        const returnUrl = String(url.searchParams.get("returnUrl") ?? "");
+        if (!returnUrl || !isAllowedAuthReturnUrl(returnUrl)) {
+          return error("Invalid returnUrl", 400, cors);
+        }
+        if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_REDIRECT_URI || !env.JWT_SECRET) {
+          return error("Google OAuth is not configured", 500, cors);
+        }
+        const state = await createGoogleOAuthState(returnUrl, env.JWT_SECRET);
+        const authUrl = buildGoogleAuthorizeUrl(
+          env.GOOGLE_CLIENT_ID,
+          env.GOOGLE_REDIRECT_URI,
+          state,
+        );
+        return json({ url: authUrl }, 200, cors);
+      }
+
+      if (path === "/v1/auth/google/callback" && request.method === "GET") {
+        if (!env.JWT_SECRET) return error("Auth is not configured", 500, cors);
+        const code = String(url.searchParams.get("code") ?? "");
+        const state = String(url.searchParams.get("state") ?? "");
+        if (!code || !state) return error("Missing OAuth parameters", 400, cors);
+        const returnUrl = await verifyGoogleOAuthState(state, env.JWT_SECRET);
+        if (!returnUrl || !isAllowedAuthReturnUrl(returnUrl)) {
+          return error("Invalid OAuth state", 400, cors);
+        }
+        const identity = await exchangeGoogleCodeForIdentity(code, {
+          clientId: env.GOOGLE_CLIENT_ID,
+          clientSecret: env.GOOGLE_CLIENT_SECRET,
+          redirectUri: env.GOOGLE_REDIRECT_URI,
+        });
+        if (!identity) return error("Google authentication failed", 401, cors);
+        const user = await findOrCreateUserForProvider(
+          env.DB,
+          identity.email,
+          "google",
+          identity.subject,
+        );
+        const token = await issueAuthToken(env.DB, user, env.JWT_SECRET);
+        const target = new URL(returnUrl);
+        target.searchParams.set("token", token);
+        return Response.redirect(target.toString(), 302);
+      }
+
+      // Legacy route kept for compatibility with the existing hub web client.
       if (path === "/v1/auth/google" && request.method === "POST") {
+        if (!env.JWT_SECRET) return error("Auth is not configured", 500, cors);
         const body = (await request.json().catch(() => null)) as {
           idToken?: string;
           anonymousId?: string;
@@ -247,67 +396,130 @@ export default {
         if (!body?.idToken) return error("idToken required", 400, cors);
         const email = await verifyGoogleIdToken(body.idToken, env.GOOGLE_CLIENT_ID);
         if (!email) return error("Invalid Google token", 401, cors);
-        const user = await findOrCreateUser(env.DB, email);
-        const sessionToken = await createSession(env.DB, user.id);
-        let claimed = 0;
-        if (body.anonymousId) {
-          claimed = await claimCommentsForUser(env.DB, user.id, body.anonymousId);
-        }
+        const user = await findOrCreateUserForProvider(env.DB, email, "google", email);
+        const token = await issueAuthToken(env.DB, user, env.JWT_SECRET);
+        const claimed = await claimAnonymousActivityForUser(
+          env.DB,
+          user.id,
+          body.anonymousId,
+        );
+        const authUser = await getPublicAuthUser(env.DB, user);
         return json(
-          { email: user.email, sessionToken, claimedComments: claimed },
+          {
+            token,
+            user: authUser,
+            claimed,
+            // Legacy fields for existing hub web clients:
+            email: user.email,
+            sessionToken: token,
+            claimedComments: claimed.claimedComments,
+          },
           200,
           cors,
         );
       }
 
+      if (path === "/v1/auth/me" && request.method === "GET") {
+        const user = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+          env.JWT_SECRET,
+        );
+        if (!user) return error("Unauthorized", 401, cors);
+        const anonymousId = url.searchParams.get("anonymousId") || undefined;
+        if (anonymousId) {
+          await claimAnonymousActivityForUser(env.DB, user.id, anonymousId);
+        }
+        const authUser = await getPublicAuthUser(env.DB, user);
+        return json({ user: authUser }, 200, cors);
+      }
+
+      // Legacy route mapped to /v1/auth/me shape for old clients.
       if (path === "/v1/auth/session" && request.method === "GET") {
-        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        const user = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+          env.JWT_SECRET,
+        );
         if (!user) return error("Not signed in", 401, cors);
         return json({ email: user.email, nickname: user.nickname ?? null }, 200, cors);
       }
 
+      if (path === "/v1/auth/logout" && request.method === "POST") {
+        await revokeJwtFromRequest(env.DB, request, env.JWT_SECRET);
+        return json(
+          { ok: true },
+          200,
+          {
+            ...cors,
+            "Set-Cookie":
+              "sfl_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
+          },
+        );
+      }
+
       if (path === "/v1/auth/claim-comments" && request.method === "POST") {
-        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        const user = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+          env.JWT_SECRET,
+        );
         if (!user) return error("Not signed in", 401, cors);
         const body = (await request.json().catch(() => null)) as {
           anonymousId?: string;
         } | null;
         if (!body?.anonymousId) return error("anonymousId required", 400, cors);
-        const claimed = await claimCommentsForUser(
-          env.DB,
-          user.id,
-          body.anonymousId,
-        );
-        return json({ claimedComments: claimed }, 200, cors);
+        const claimed = await claimAnonymousActivityForUser(env.DB, user.id, body.anonymousId);
+        return json(claimed, 200, cors);
       }
 
       if (path === "/v1/profile" && request.method === "GET") {
-        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        const user = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+          env.JWT_SECRET,
+        );
         if (!user) return error("Not signed in", 401, cors);
         return handleGetProfile(env.DB, user, cors);
       }
 
       if (path === "/v1/profile" && request.method === "PUT") {
-        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        const user = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+          env.JWT_SECRET,
+        );
         if (!user) return error("Not signed in", 401, cors);
         const body = await request.json().catch(() => null);
         return handlePutProfile(env.DB, user, body, cors);
       }
 
       if (path === "/v1/profile/my-digs-today" && request.method === "GET") {
-        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        const user = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+          env.JWT_SECRET,
+        );
         if (!user) return error("Not signed in", 401, cors);
         return handleGetMyDigsToday(env.DB, user, hubBase, cors);
       }
 
       if (path === "/v1/profile/saved-lands" && request.method === "GET") {
-        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        const user = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+          env.JWT_SECRET,
+        );
         if (!user) return error("Not signed in", 401, cors);
         return handleGetSavedLands(env.DB, user, cors);
       }
 
       if (path === "/v1/profile/saved-lands" && request.method === "POST") {
-        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        const user = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+          env.JWT_SECRET,
+        );
         if (!user) return error("Not signed in", 401, cors);
         const body = await request.json().catch(() => null);
         return handlePostSavedLand(env.DB, user, body, cors);
@@ -315,7 +527,11 @@ export default {
 
       const deleteSavedLandMatch = path.match(/^\/v1\/profile\/saved-lands\/([^/]+)$/);
       if (deleteSavedLandMatch && request.method === "DELETE") {
-        const user = await getUserFromSession(env.DB, sessionTokenFromRequest(request));
+        const user = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+          env.JWT_SECRET,
+        );
         if (!user) return error("Not signed in", 401, cors);
         return handleDeleteSavedLand(env.DB, user, deleteSavedLandMatch[1], cors);
       }
@@ -324,11 +540,16 @@ export default {
         if (!verifyWriteSecret(request, env.HUB_WRITE_SECRET)) {
           return error("Unauthorized", 401, cors);
         }
+        const sessionUser = await getUserFromSession(
+          env.DB,
+          sessionTokenFromRequest(request),
+          env.JWT_SECRET,
+        );
         const raw = await request.json().catch(() => null);
         if (raw && typeof raw === "object" && "landId" in raw && "digs" in raw) {
           const validated = validateDigDayBody(raw);
           if (typeof validated === "string") return error(validated, 400, cors);
-          const saved = await saveDigDay(env.DB, validated, hubBase);
+          const saved = await saveDigDay(env.DB, validated, hubBase, sessionUser?.id ?? null);
           return json(saved, 201, cors);
         }
         const validated = validateCreateBody(raw);
@@ -364,6 +585,7 @@ export default {
         const sessionUser = await getUserFromSession(
           env.DB,
           sessionTokenFromRequest(request),
+          env.JWT_SECRET,
         );
         const viewerId = sessionUser?.id ?? null;
 
@@ -434,7 +656,7 @@ export default {
           return error("Rate limit exceeded", 429, cors);
         }
 
-        const saved = await savePracticeRun(env.DB, validated, request);
+        const saved = await savePracticeRun(env.DB, validated, request, env.JWT_SECRET);
         return json(saved, 201, cors);
       }
 
@@ -444,6 +666,7 @@ export default {
         const sessionUser = await getUserFromSession(
           env.DB,
           sessionTokenFromRequest(request),
+          env.JWT_SECRET,
         );
         const run = await getPracticeRunById(env.DB, runId, sessionUser?.id ?? null);
         if (!run) return error("Practice run not found", 404, cors);
@@ -461,6 +684,7 @@ export default {
         const sessionUser = await getUserFromSession(
           env.DB,
           sessionTokenFromRequest(request),
+          env.JWT_SECRET,
         );
         const entries = await listPracticeLeaderboard(env.DB, {
           source: sourceParam,
@@ -487,6 +711,7 @@ export default {
         const sessionUser = await getUserFromSession(
           env.DB,
           sessionTokenFromRequest(request),
+          env.JWT_SECRET,
         );
         const limit = Math.min(
           100,
@@ -593,6 +818,7 @@ export default {
           const sessionUser = await getUserFromSession(
             env.DB,
             sessionTokenFromRequest(request),
+            env.JWT_SECRET,
           );
           const state = await loadReactionState(sessionUser?.id ?? null);
           return json(state, 200, cors);
@@ -602,6 +828,7 @@ export default {
           const sessionUser = await getUserFromSession(
             env.DB,
             sessionTokenFromRequest(request),
+            env.JWT_SECRET,
           );
           if (!sessionUser) {
             return error("Sign in required to react", 401, cors);
@@ -697,6 +924,7 @@ export default {
           const sessionUser = await getUserFromSession(
             env.DB,
             sessionTokenFromRequest(request),
+            env.JWT_SECRET,
           );
           if (!sessionUser) {
             return error("Sign in required to comment", 401, cors);
@@ -814,6 +1042,10 @@ export default {
       return error("Not found", 404, cors);
     } catch (e) {
       console.error(e);
+      const err = e as Error & { status?: number };
+      if (err?.status && err.status >= 400 && err.status < 500) {
+        return error(err.message || "Request failed", err.status, cors);
+      }
       return error("Internal server error", 500, cors);
     }
   },

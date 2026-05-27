@@ -7,7 +7,11 @@ import {
   type PracticeRunPayload,
 } from "@sfl-digging-hub/shared";
 import { randomId } from "./crypto";
-import { getUserFromSession, sessionTokenFromRequest } from "./auth";
+import {
+  claimPracticeRunsForUser,
+  getUserFromSession,
+  sessionTokenFromRequest,
+} from "./auth";
 
 const MAX_DIG_COUNT = 200;
 const MAX_DURATION_MS = 3_600_000;
@@ -106,8 +110,16 @@ export async function savePracticeRun(
   db: D1Database,
   payload: PracticeRunPayload,
   request: Request,
+  jwtSecret?: string,
 ): Promise<PracticeLeaderboardEntry> {
-  const sessionUser = await getUserFromSession(db, sessionTokenFromRequest(request));
+  const sessionUser = await getUserFromSession(
+    db,
+    sessionTokenFromRequest(request),
+    jwtSecret,
+  );
+  if (sessionUser && payload.anonymousId) {
+    await claimPracticeRunsForUser(db, sessionUser.id, payload.anonymousId);
+  }
   const id = randomId();
   const createdAt = new Date().toISOString();
   const score = computePracticeScore(payload.durationMs, payload.digCount);
