@@ -186,58 +186,68 @@ onBeforeUnmount(clearSignInPoll);
 
     <div
       v-if="showSignInModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4"
+      class="modal modal-open modal-middle px-4"
+      role="dialog"
+      aria-modal="true"
       @click.self="closeSignInModal"
     >
-      <div class="w-full max-w-md rounded-box bg-base-100 shadow-xl border border-base-300 p-5">
+      <div class="modal-box w-full max-w-md border border-base-300 shadow-xl">
         <div class="flex items-start justify-between gap-3">
-          <h2 class="text-lg font-semibold">Sign in</h2>
-          <button type="button" class="btn btn-ghost btn-xs" @click="closeSignInModal">Close</button>
+          <div>
+            <h2 class="text-lg font-semibold">Sign in</h2>
+            <p class="text-sm text-base-content/70 mt-1">
+              Enter your email and approve the link we send. No code needed.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-circle shrink-0"
+            aria-label="Close sign in modal"
+            @click="closeSignInModal"
+          >
+            ✕
+          </button>
         </div>
 
-        <p class="text-sm text-base-content/70 mt-2">
-          Enter your email and approve the link we send. No code needed.
-        </p>
-
-        <label class="form-control mt-4">
-          <span class="label-text text-xs uppercase tracking-wide">Email</span>
+        <fieldset class="fieldset mt-5">
+          <legend class="fieldset-legend text-sm">Email</legend>
           <input
             v-model="signInEmail"
             type="email"
             autocomplete="email"
-            class="input input-bordered input-sm mt-1"
+            class="input input-bordered w-full h-11 text-base"
             placeholder="you@example.com"
             :disabled="signInPending"
             @keydown.enter.prevent="startSignIn"
           />
-        </label>
+        </fieldset>
 
-        <div class="mt-4 flex items-center gap-2">
+        <div class="mt-5 flex flex-col sm:flex-row sm:items-center gap-2">
           <button
             type="button"
-            class="btn btn-primary btn-sm"
+            class="btn btn-primary h-11 sm:w-auto"
             :disabled="signInPending"
             @click="startSignIn"
           >
-            {{ signInPending ? "Waiting for approval…" : "Send approve link" }}
+            {{ signInPending ? "Waiting for approval..." : "Send approve link" }}
           </button>
           <button
             v-if="signInPending"
             type="button"
-            class="btn btn-ghost btn-sm"
+            class="btn btn-ghost h-11 sm:w-auto"
             @click="closeSignInModal"
           >
             Cancel
           </button>
         </div>
 
-        <p v-if="signInPending" class="text-xs text-base-content/60 mt-2">
+        <p v-if="signInPending" class="text-xs text-base-content/60 mt-3">
           Check your email and open the approve link.
           <span v-if="signInExpiresAt">Expires at {{ signInExpiresAt }}.</span>
         </p>
         <p v-if="signInError" class="text-error text-xs mt-2">{{ signInError }}</p>
 
-        <div class="divider text-xs text-base-content/50 my-4">or</div>
+        <div class="divider text-xs text-base-content/50 my-5">or</div>
         <p class="text-sm text-base-content/70 mb-2">Continue with Google</p>
         <GoogleSignIn @signed-in="onGoogleSignedIn" />
       </div>
