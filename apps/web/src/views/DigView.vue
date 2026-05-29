@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import type { SnapshotPublic } from "@sfl-digging-hub/shared";
 import { summarizeDigLoot } from "@sfl-digging-hub/shared";
+import { RouterLink } from "vue-router";
 import {
   getComments,
   getSession,
@@ -12,6 +13,7 @@ import {
 } from "@/api/client";
 import DigResultsGrid from "@/components/DigResultsGrid.vue";
 import GoogleSignIn from "@/components/GoogleSignIn.vue";
+import { publicDigTitle } from "@/utils/anonymize";
 
 const props = defineProps<{ id: string }>();
 
@@ -48,8 +50,11 @@ async function load() {
   error.value = null;
   snapshot.value = null;
   try {
-    snapshot.value = await getSnapshot(props.id);
-    const c = await getComments(props.id);
+    const [snap, c] = await Promise.all([
+      getSnapshot(props.id),
+      getComments(props.id),
+    ]);
+    snapshot.value = snap;
     comments.value = c.comments;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Failed to load dig";
@@ -70,9 +75,13 @@ async function submitComment() {
   }
 }
 
-function onSignedIn(email: string) {
+async function onSignedIn(email: string) {
   sessionEmail.value = email;
 }
+
+const pageTitle = computed(() =>
+  publicDigTitle(snapshot.value?.visibility, snapshot.value?.displayName),
+);
 
 onMounted(async () => {
   await refreshSession();
@@ -90,19 +99,22 @@ watch(() => props.id, load);
   </section>
   <section v-else class="space-y-8">
     <header class="space-y-1">
-      <h1 class="text-2xl font-bold text-primary">
-        {{ snapshot.displayName || "Desert dig" }}
-      </h1>
+      <h1 class="text-2xl font-bold text-primary">{{ pageTitle }}</h1>
       <p class="text-base-content/70 text-sm">
         {{ snapshot.utcDate }} · day grid · {{ snapshot.digs.length }} digs ·
         {{ statsTreasures }} treasures
       </p>
-      <p class="text-base-content/50 text-xs">
+      <p v-if="snapshot.visibility === 'public'" class="text-base-content/50 text-xs">
+        Anonymous showcase — only people with this link can find this dig. Add your land ID on
+        <RouterLink to="/profile" class="link link-hover">My Land Digs</RouterLink>
+        to track today's grid privately.
+      </p>
+      <p v-else class="text-base-content/50 text-xs">
         Each tile shows what was found and the dig order number — not a step-by-step replay.
       </p>
     </header>
 
-    <DigResultsGrid :digs="snapshot.digs" />
+    <DigResultsGrid :digs="snapshot.digs" show-order />
 
     <div v-if="loot" class="card bg-base-200 max-w-md mx-auto w-full">
       <div class="card-body py-4 text-sm space-y-2">

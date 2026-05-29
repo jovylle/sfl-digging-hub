@@ -26,7 +26,7 @@ export function hasTestnetQuery(
 
 export function testnetLandHubMessage(landId?: string): string {
   const id = landId ? ` (${landId})` : "";
-  return `This is a testnet land ID${id}. Use d1g.uk with ?${TESTNET_QUERY} in the URL. Dig-day history is not stored on the hub for testnet farms.`;
+  return `This is a testnet land ID${id}. Use d1g.uk with ?${TESTNET_QUERY} in the URL. Land IDs are not shown on the public digging hub.`;
 }
 
 /** Link to open a land on d1g.uk (production or testnet). */

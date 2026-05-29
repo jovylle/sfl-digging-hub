@@ -6,6 +6,7 @@ import type {
   SnapshotStats,
   Visibility,
 } from "@sfl-digging-hub/shared";
+import { sanitizeDisplayName } from "./anonymize";
 import { randomId, randomToken, sha256Hex } from "./crypto";
 
 export type SnapshotRow = {
@@ -31,7 +32,8 @@ export function rowToPublic(row: SnapshotRow): SnapshotPublic {
   return {
     id: row.id,
     utcDate: row.utc_date,
-    displayName: row.display_name,
+    landId: row.visibility === "public" ? null : row.land_id?.trim() || null,
+    displayName: sanitizeDisplayName(row.display_name, row.visibility, row.land_id),
     patterns: JSON.parse(row.patterns_json),
     digs: JSON.parse(row.digs_json) as DigEntry[],
     stats: JSON.parse(row.stats_json) as SnapshotStats,

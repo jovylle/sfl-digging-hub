@@ -1,11 +1,17 @@
 import {
   computePracticeScore,
+  type DigEntry,
+  type FormationPlacement,
   type PracticeLeaderboardEntry,
   type PracticePatternSource,
   type PracticeRunPayload,
 } from "@sfl-digging-hub/shared";
 import { randomId } from "./crypto";
-import { getUserFromSession, sessionTokenFromRequest } from "./auth";
+import {
+  claimPracticeRunsForUser,
+  getUserFromSession,
+  sessionTokenFromRequest,
+} from "./auth";
 
 const MAX_DIG_COUNT = 200;
 const MAX_DURATION_MS = 3_600_000;
@@ -28,6 +34,8 @@ export type PracticeRunRow = {
   treasure_count: number;
   score: number;
   created_at: string;
+  digs_json: string | null;
+  formations_json: string | null;
 };
 
 export function validatePracticeRunBody(body: unknown): PracticeRunPayload | string {
@@ -68,10 +76,20 @@ export function validatePracticeRunBody(body: unknown): PracticeRunPayload | str
     patternDate = String(b.patternDate);
   }
 
+  // Accept `nickname` as an alias for `displayName` (sent by the sfl-crab practice client)
+  const rawDisplayName = b.displayName ?? b.nickname;
   const displayName =
-    typeof b.displayName === "string" ? b.displayName.trim().slice(0, MAX_DISPLAY_NAME) : undefined;
+    typeof rawDisplayName === "string" ? rawDisplayName.trim().slice(0, MAX_DISPLAY_NAME) : undefined;
   const anonymousId =
     typeof b.anonymousId === "string" ? b.anonymousId.slice(0, 64) : undefined;
+
+  const digs: DigEntry[] | undefined = Array.isArray(b.digs)
+    ? (b.digs as DigEntry[]).slice(0, 200)
+    : undefined;
+
+  const formations: FormationPlacement[] | undefined = Array.isArray(b.formations)
+    ? (b.formations as FormationPlacement[]).slice(0, 20)
+    : undefined;
 
   return {
     patternSource: source as PracticePatternSource,
@@ -83,6 +101,8 @@ export function validatePracticeRunBody(body: unknown): PracticeRunPayload | str
     treasureCount: Math.floor(treasureCount),
     displayName: displayName || undefined,
     anonymousId,
+    digs,
+    formations,
   };
 }
 
@@ -90,8 +110,16 @@ export async function savePracticeRun(
   db: D1Database,
   payload: PracticeRunPayload,
   request: Request,
+  jwtSecret?: string,
 ): Promise<PracticeLeaderboardEntry> {
-  const sessionUser = await getUserFromSession(db, sessionTokenFromRequest(request));
+  const sessionUser = await getUserFromSession(
+    db,
+    sessionTokenFromRequest(request),
+    jwtSecret,
+  );
+  if (sessionUser && payload.anonymousId) {
+    await claimPracticeRunsForUser(db, sessionUser.id, payload.anonymousId);
+  }
   const id = randomId();
   const createdAt = new Date().toISOString();
   const score = computePracticeScore(payload.durationMs, payload.digCount);
@@ -99,12 +127,20 @@ export async function savePracticeRun(
     payload.displayName ||
     (sessionUser ? sessionUser.email.split("@")[0]?.slice(0, MAX_DISPLAY_NAME) : null);
 
+  const digsJson = payload.digs && payload.digs.length > 0
+    ? JSON.stringify(payload.digs)
+    : null;
+
+  const formationsJson = payload.formations && payload.formations.length > 0
+    ? JSON.stringify(payload.formations)
+    : null;
+
   await db
     .prepare(
       `INSERT INTO practice_runs (
         id, user_id, anonymous_id, display_name, pattern_source, pattern_date,
-        pattern_keys_json, dig_count, duration_ms, victory, treasure_count, score, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        pattern_keys_json, dig_count, duration_ms, victory, treasure_count, score, created_at, digs_json, formations_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -120,6 +156,8 @@ export async function savePracticeRun(
       payload.treasureCount,
       score,
       createdAt,
+      digsJson,
+      formationsJson,
     )
     .run();
 
@@ -128,13 +166,46 @@ export async function savePracticeRun(
     displayName,
     patternSource: payload.patternSource,
     patternDate: payload.patternDate ?? null,
+    patternKeys: payload.patternKeys,
     digCount: payload.digCount,
     durationMs: payload.durationMs,
     score,
     treasureCount: payload.treasureCount,
+    victory: payload.victory,
     createdAt,
     owned: Boolean(sessionUser),
+    digs: payload.digs ?? undefined,
+    formations: payload.formations ?? undefined,
   };
+}
+
+function parseDigs(raw: string | null): DigEntry[] | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as DigEntry[]) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseFormations(raw: string | null): FormationPlacement[] | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as FormationPlacement[]) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parsePatternKeys(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as string[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 function rowToEntry(row: PracticeRunRow, viewerUserId?: string | null): PracticeLeaderboardEntry {
@@ -143,13 +214,30 @@ function rowToEntry(row: PracticeRunRow, viewerUserId?: string | null): Practice
     displayName: row.display_name,
     patternSource: row.pattern_source as PracticePatternSource,
     patternDate: row.pattern_date,
+    patternKeys: parsePatternKeys(row.pattern_keys_json),
     digCount: row.dig_count,
     durationMs: row.duration_ms,
     score: row.score,
     treasureCount: row.treasure_count,
+    victory: Boolean(row.victory),
     createdAt: row.created_at,
     owned: Boolean(viewerUserId && row.user_id === viewerUserId),
+    digs: parseDigs(row.digs_json),
+    formations: parseFormations(row.formations_json),
   };
+}
+
+export async function getPracticeRunById(
+  db: D1Database,
+  id: string,
+  viewerUserId?: string | null,
+): Promise<PracticeLeaderboardEntry | null> {
+  const row = await db
+    .prepare(`SELECT * FROM practice_runs WHERE id = ?`)
+    .bind(id)
+    .first<PracticeRunRow>();
+  if (!row) return null;
+  return rowToEntry(row, viewerUserId);
 }
 
 export async function listPracticeLeaderboard(

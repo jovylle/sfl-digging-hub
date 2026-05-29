@@ -2,7 +2,10 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { formatPracticeScore, type PracticeLeaderboardEntry } from "@sfl-digging-hub/shared";
 import { getPracticeLeaderboard, getPracticeVictories } from "@/api/client";
+import { D1G_BASE_URL, D1G_LABEL } from "@/utils/d1gUrl";
 import { formatDayLabel, groupByUtcDate } from "@/utils/dayGroup";
+import DigResultsGrid from "@/components/DigResultsGrid.vue";
+import FormationGrid from "@/components/FormationGrid.vue";
 
 const PAGE_SIZE = 30;
 
@@ -117,6 +120,14 @@ watch(source, () => {
 watch(date, () => {
   if (source.value === "daily") loadLeaderboard();
 });
+
+const expandedRows = ref(new Set<string>());
+function toggleExpand(id: string) {
+  const next = new Set(expandedRows.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  expandedRows.value = next;
+}
 </script>
 
 <template>
@@ -125,8 +136,8 @@ watch(date, () => {
       <h1 class="text-2xl font-bold text-primary">Practice</h1>
       <p class="text-base-content/70 text-sm mt-1">
         Victories from
-        <a href="https://d1g.uk/practice" class="link link-primary" target="_blank" rel="noopener"
-          >d1g.uk practice mode</a
+        <a :href="`${D1G_BASE_URL}/practice`" class="link link-primary" target="_blank" rel="noopener"
+          >{{ D1G_LABEL }} practice mode</a
         >
         — find all treasures on a round. Lower score is better (time + dig penalty).
       </p>
@@ -201,23 +212,63 @@ watch(date, () => {
           </div>
           <ul class="space-y-3">
             <li v-for="row in group.items" :key="row.id" class="card bg-base-200">
-              <div class="card-body py-4 flex-row items-center justify-between gap-4">
-                <div class="min-w-0">
-                  <p class="font-semibold truncate">
-                    {{ row.displayName || "Anonymous" }}
-                    <span v-if="row.owned" class="badge badge-success badge-xs ml-1">you</span>
-                  </p>
-                  <p class="text-sm text-base-content/60">
-                    {{ formatTime(row.createdAt) }}
-                    · {{ row.digCount }} digs · {{ formatDuration(row.durationMs) }}
-                    · score {{ formatPracticeScore(row.score) }}
-                  </p>
-                  <p class="text-xs text-base-content/50 mt-0.5">
-                    {{ row.treasureCount }} treasure{{ row.treasureCount !== 1 ? "s" : "" }}
-                    · {{ source === "daily" ? "daily patterns" : "random round" }}
-                  </p>
+              <div class="card-body py-4 flex flex-col sm:flex-row gap-4 sm:items-start">
+                <div class="flex gap-2 shrink-0">
+                  <div v-if="row.digs && row.digs.length" class="flex flex-col items-center gap-0.5">
+                    <span class="text-[0.6rem] text-base-content/40 uppercase tracking-wide">Digs</span>
+                    <DigResultsGrid :digs="row.digs" compact class="w-24 sm:w-28" />
+                  </div>
+                  <a
+                    v-else
+                    :href="`${D1G_BASE_URL}/practice/run/${row.id}`"
+                    target="_blank"
+                    rel="noopener"
+                    class="w-24 sm:w-28 aspect-square rounded-lg border-2 border-dashed border-base-content/20 flex flex-col items-center justify-center gap-1 text-base-content/40 hover:border-primary hover:text-primary transition-colors shrink-0"
+                    title="View full grid on d1g"
+                    @click.stop
+                  >
+                    <span class="text-xl">⛏️</span>
+                    <span class="text-[0.6rem] font-medium text-center leading-tight">View grid<br>on d1g ↗</span>
+                  </a>
+                  <div v-if="row.formations && row.formations.length" class="flex flex-col items-center gap-0.5">
+                    <span class="text-[0.6rem] text-base-content/40 uppercase tracking-wide">Formations</span>
+                    <FormationGrid :formations="row.formations" compact class="w-24 sm:w-28" />
+                  </div>
                 </div>
-                <span class="badge badge-primary badge-lg shrink-0">Victory</span>
+                <div class="flex-1 min-w-0 flex flex-row items-center justify-between gap-3">
+                  <div class="min-w-0">
+                    <p class="font-semibold truncate">
+                      {{ row.displayName || "Anonymous" }}
+                      <span v-if="row.owned" class="badge badge-success badge-xs ml-1">you</span>
+                    </p>
+                    <p class="text-sm text-base-content/60">
+                      {{ formatTime(row.createdAt) }}
+                      · {{ row.digCount }} digs · {{ formatDuration(row.durationMs) }}
+                      · score {{ formatPracticeScore(row.score) }}
+                    </p>
+                    <p class="text-xs text-base-content/50 mt-0.5">
+                      {{ row.treasureCount }} treasure{{ row.treasureCount !== 1 ? "s" : "" }}
+                      · {{ source === "daily" ? "daily patterns" : "random round" }}
+                    </p>
+                    <div v-if="row.patternKeys && row.patternKeys.length" class="flex flex-wrap gap-1 mt-1">
+                      <span
+                        v-for="key in row.patternKeys"
+                        :key="key"
+                        class="badge badge-xs badge-ghost"
+                      >{{ key }}</span>
+                    </div>
+                  </div>
+                  <div class="flex flex-col items-end gap-1 shrink-0">
+                    <span class="badge badge-primary badge-lg">Victory</span>
+                    <a
+                      :href="`${D1G_BASE_URL}/practice/run/${row.id}`"
+                      target="_blank"
+                      rel="noopener"
+                      class="link link-primary text-xs"
+                      @click.stop
+                    >View run →</a>
+                  </div>
+                </div>
               </div>
             </li>
           </ul>
@@ -243,7 +294,7 @@ watch(date, () => {
       </template>
 
       <p v-else class="text-base-content/50 text-sm">
-        No victories yet for this filter. Win a round on d1g.uk practice (with Save score on).
+        No victories yet for this filter. Win a round on {{ D1G_LABEL }} practice (with Save score on).
       </p>
     </template>
 
@@ -265,24 +316,68 @@ watch(date, () => {
                 <th>Score</th>
                 <th>Digs</th>
                 <th>Time</th>
+                <th />
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(row, i) in leaderboard" :key="row.id">
-                <td>{{ i + 1 }}</td>
-                <td>
-                  {{ row.displayName || "Anonymous" }}
-                  <span v-if="row.owned" class="badge badge-success badge-xs ml-1">you</span>
-                </td>
-                <td class="font-mono text-xs">{{ formatPracticeScore(row.score) }}</td>
-                <td>{{ row.digCount }}</td>
-                <td class="font-mono text-xs">{{ formatDuration(row.durationMs) }}</td>
-              </tr>
+              <template v-for="(row, i) in leaderboard" :key="row.id">
+                <tr
+                  :class="(row.digs?.length || row.formations?.length || row.patternKeys?.length) ? 'cursor-pointer hover' : ''"
+                  @click="(row.digs?.length || row.formations?.length || row.patternKeys?.length) && toggleExpand(row.id)"
+                >
+                  <td>{{ i + 1 }}</td>
+                  <td>
+                    {{ row.displayName || "Anonymous" }}
+                    <span v-if="row.owned" class="badge badge-success badge-xs ml-1">you</span>
+                    <a
+                      :href="`${D1G_BASE_URL}/practice/run/${row.id}`"
+                      target="_blank"
+                      rel="noopener"
+                      class="link link-primary text-xs ml-1 opacity-50 hover:opacity-100"
+                      title="View run on d1g"
+                      @click.stop
+                    >↗</a>
+                  </td>
+                  <td class="font-mono text-xs">{{ formatPracticeScore(row.score) }}</td>
+                  <td>{{ row.digCount }}</td>
+                  <td class="font-mono text-xs">{{ formatDuration(row.durationMs) }}</td>
+                  <td class="text-right">
+                    <span
+                      v-if="row.digs?.length || row.formations?.length || row.patternKeys?.length"
+                      class="text-base-content/40 text-xs select-none"
+                    >{{ expandedRows.has(row.id) ? "▲" : "▼" }}</span>
+                  </td>
+                </tr>
+                <tr v-if="expandedRows.has(row.id)" class="bg-base-100">
+                  <td colspan="6" class="py-3 px-4">
+                    <div class="flex flex-wrap gap-5 items-start">
+                      <div v-if="row.digs?.length" class="flex flex-col items-center gap-1">
+                        <span class="text-[0.6rem] text-base-content/40 uppercase tracking-wide">Digs</span>
+                        <DigResultsGrid :digs="row.digs" compact class="w-28" />
+                      </div>
+                      <div v-if="row.formations?.length" class="flex flex-col items-center gap-1">
+                        <span class="text-[0.6rem] text-base-content/40 uppercase tracking-wide">Formations</span>
+                        <FormationGrid :formations="row.formations" compact class="w-28" />
+                      </div>
+                      <div v-if="row.patternKeys?.length" class="flex flex-col gap-1">
+                        <span class="text-[0.6rem] text-base-content/40 uppercase tracking-wide">Patterns</span>
+                        <div class="flex flex-wrap gap-1">
+                          <span
+                            v-for="key in row.patternKeys"
+                            :key="key"
+                            class="badge badge-sm badge-outline"
+                          >{{ key }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
         <p v-else class="text-base-content/50 text-sm">
-          No ranked runs yet. Finish a practice round on d1g.uk to appear here.
+          No ranked runs yet. Finish a practice round on {{ D1G_LABEL }} to appear here.
         </p>
       </template>
     </template>

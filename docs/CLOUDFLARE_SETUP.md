@@ -114,8 +114,10 @@ Production vars in `wrangler.toml` should match:
 ```toml
 HUB_BASE_URL = "https://hub.d1g.uk"
 API_BASE_URL = "https://api.d1g.uk"
-CORS_ORIGINS = "https://d1g.uk,https://beta.d1g.uk,https://development.d1g.uk,https://hub.d1g.uk"
+CORS_ORIGINS = "https://d1g.uk,https://beta.d1g.uk,https://development.d1g.uk,https://hub.d1g.uk,https://beta.hub.d1g.uk"
 ```
+
+Netlify preview origins (`https://*--*.netlify.app`) and localhost ports are accepted by API CORS logic.
 
 ---
 
@@ -200,6 +202,7 @@ npx wrangler deploy --env beta
 - [ ] `hub.d1g.uk` loads the hub UI
 - [ ] `hub.d1g.uk/replay/...` SPA works (assets `single-page-application` mode)
 - [ ] CORS includes `https://d1g.uk` for Share from crab
+- [ ] Auth secrets configured (`JWT_SECRET`, `GOOGLE_CLIENT_SECRET`, OTP email vars)
 
 ---
 
@@ -214,6 +217,16 @@ npx wrangler deploy --env beta
 | `ASSETS` binding missing | Deploy with Wrangler 3.57+ / 4.x and `[assets]` block |
 
 ---
+
+## 11. Auth env vars
+
+Set these in Cloudflare Worker secrets (beta + production) and `workers/.dev.vars` for local:
+
+- `JWT_SECRET` — HMAC secret for Bearer JWT signing/verification (`/v1/auth/*`)
+- `GOOGLE_CLIENT_SECRET` — Google OAuth secret for `/v1/auth/google/callback`
+- `GOOGLE_REDIRECT_URI` — full callback URL served by this API host
+- `OTP_RESEND_API_KEY` — Resend API key for OTP delivery
+- `OTP_EMAIL_FROM` — sender for OTP email, e.g. `Digging Hub <auth@d1g.uk>`
 
 ## Quick script
 

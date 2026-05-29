@@ -35,14 +35,6 @@ export type CommunityItem = {
   };
 };
 
-export type LandDayItem = {
-  id: string;
-  utcDate: string;
-  digCount: number;
-  updatedAt: string;
-  replayUrl: string;
-};
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -67,19 +59,27 @@ export function getSnapshot(id: string): Promise<SnapshotPublic> {
   return request(`/v1/snapshots/${id}`);
 }
 
-export function getLandDays(landId: string): Promise<{ landId: string; days: LandDayItem[] }> {
-  return request(`/v1/lands/${encodeURIComponent(landId)}/days`);
-}
-
 export function getCommunity(options: {
-  before?: string | null;
+  offset?: number;
   limit?: number;
-} = {}): Promise<{ items: CommunityItem[]; nextCursor: string | null }> {
+} = {}): Promise<{ items: CommunityItem[]; nextOffset: number | null }> {
   const params = new URLSearchParams();
-  if (options.before) params.set("before", options.before);
+  if (options.offset) params.set("offset", String(options.offset));
   if (options.limit) params.set("limit", String(options.limit));
   const q = params.toString();
   return request(`/v1/community${q ? `?${q}` : ""}`);
+}
+
+export type MyLandDigToday = {
+  landId: string;
+  snapshotId: string | null;
+  digCount: number;
+  digs: DigEntry[];
+  replayUrl: string | null;
+};
+
+export function getMyDigsToday(): Promise<{ utcDate: string; lands: MyLandDigToday[] }> {
+  return request("/v1/profile/my-digs-today", { headers: authHeaders() });
 }
 
 export function getComments(snapshotId: string): Promise<{ comments: Comment[] }> {
@@ -112,16 +112,6 @@ export function checkHealth(): Promise<{ ok: boolean }> {
   return request("/health");
 }
 
-export const JOURNAL_LAND_KEY = "sfl-hub-journal-land";
-
-export function loadJournalLandId(): string | null {
-  return localStorage.getItem(JOURNAL_LAND_KEY);
-}
-
-export function saveJournalLandId(landId: string): void {
-  localStorage.setItem(JOURNAL_LAND_KEY, landId);
-}
-
 const ANON_KEY = "sfl-hub-anonymous-id";
 const SESSION_KEY = "sfl-hub-session";
 
@@ -143,8 +133,57 @@ export function setSessionToken(token: string | null): void {
   else localStorage.removeItem(SESSION_KEY);
 }
 
-export function getSession(): Promise<{ email: string }> {
+export type SessionInfo = {
+  email: string;
+  nickname: string | null;
+};
+
+export function getDisplayName(session: SessionInfo): string {
+  return session.nickname?.trim() || session.email.split("@")[0] || "Player";
+}
+
+export function getAvatarUrl(seed: string): string {
+  return `https://api.dicebear.com/9.x/adventurer-neutral/svg?seed=${encodeURIComponent(seed)}`;
+}
+
+export function getSession(): Promise<SessionInfo> {
   return request("/v1/auth/session", { headers: authHeaders() });
+}
+
+export type SavedLand = {
+  landId: string;
+  savedAt: string;
+};
+
+export function getProfile(): Promise<SessionInfo> {
+  return request("/v1/profile", { headers: authHeaders() });
+}
+
+export function updateProfile(data: { nickname: string | null }): Promise<{ nickname: string | null }> {
+  return request("/v1/profile", {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function getSavedLands(): Promise<{ lands: SavedLand[] }> {
+  return request("/v1/profile/saved-lands", { headers: authHeaders() });
+}
+
+export function saveLand(landId: string): Promise<{ landId: string; savedAt: string; total: number }> {
+  return request("/v1/profile/saved-lands", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ landId }),
+  });
+}
+
+export function unsaveLand(landId: string): Promise<{ ok: boolean }> {
+  return request(`/v1/profile/saved-lands/${encodeURIComponent(landId)}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
 }
 
 export function signInWithGoogle(idToken: string): Promise<{
@@ -163,6 +202,56 @@ export function signInWithGoogle(idToken: string): Promise<{
 
 export function signOut(): void {
   setSessionToken(null);
+}
+
+export type EmailApproveStartResponse = {
+  requestId: string;
+  challengeId?: string;
+  flowId?: string;
+  expiresAt?: string;
+  status: "pending";
+};
+
+export type EmailApproveCheckResponse =
+  | {
+      status: "pending";
+      requestId?: string | null;
+      challengeId?: string | null;
+      flowId?: string | null;
+      expiresAt?: string | null;
+    }
+  | {
+      status: "approved";
+      requestId: string;
+      challengeId?: string;
+      flowId?: string;
+      token?: string;
+      accessToken?: string;
+      user?: unknown;
+    };
+
+export function startEmailApproveSignIn(body: {
+  email: string;
+  anonymousId?: string;
+  returnUrl?: string;
+}): Promise<EmailApproveStartResponse> {
+  return request("/v1/auth/approve/start", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function checkEmailApproveSignIn(body: {
+  email: string;
+  requestId?: string;
+  anonymousId?: string;
+  challengeId?: string;
+  flowId?: string;
+}): Promise<EmailApproveCheckResponse> {
+  return request("/v1/auth/approve/check", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 export function submitPracticeRun(

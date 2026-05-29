@@ -13,7 +13,7 @@ type = "Data"
 globs = ["**/*.ttf"]
 fallthrough = true
 
-# account_id = "7f0e409fd621476eb621ef4c9a436374"
+account_id = "7f0e409fd621476eb621ef4c9a436374"
 
 [[d1_databases]]
 binding = "DB"
@@ -35,6 +35,7 @@ CORS_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
 HUB_BASE_URL = "http://localhost:5173"
 API_BASE_URL = "http://localhost:8787"
 GOOGLE_CLIENT_ID = "725426501556-8g0s8oibhcueqtjpq249f7basjai2n4d.apps.googleusercontent.com"
+GOOGLE_REDIRECT_URI = "http://localhost:8787/v1/auth/google/callback"
 
 [dev]
 port = 8787
@@ -58,10 +59,11 @@ binding = "ASSETS"
 not_found_handling = "single-page-application"
 
 [env.beta.vars]
-CORS_ORIGINS = "https://development.d1g.uk,https://beta.d1g.uk,https://d1g.uk,https://beta.hub.d1g.uk,http://localhost:5173"
+CORS_ORIGINS = "https://development.d1g.uk,https://beta.d1g.uk,https://d1g.uk,https://hub.d1g.uk,https://beta.hub.d1g.uk,http://localhost:5173"
 HUB_BASE_URL = "https://beta.hub.d1g.uk"
 API_BASE_URL = "https://beta.api.d1g.uk"
 GOOGLE_CLIENT_ID = "725426501556-8g0s8oibhcueqtjpq249f7basjai2n4d.apps.googleusercontent.com"
+GOOGLE_REDIRECT_URI = "https://beta.api.d1g.uk/v1/auth/google/callback"
 
 [[env.beta.routes]]
 pattern = "beta.hub.d1g.uk"
@@ -90,10 +92,11 @@ binding = "ASSETS"
 not_found_handling = "single-page-application"
 
 [env.production.vars]
-CORS_ORIGINS = "https://d1g.uk,https://beta.d1g.uk,https://development.d1g.uk,https://hub.d1g.uk"
+CORS_ORIGINS = "https://d1g.uk,https://beta.d1g.uk,https://development.d1g.uk,https://hub.d1g.uk,https://beta.hub.d1g.uk"
 HUB_BASE_URL = "https://hub.d1g.uk"
 API_BASE_URL = "https://api.d1g.uk"
 GOOGLE_CLIENT_ID = "725426501556-8g0s8oibhcueqtjpq249f7basjai2n4d.apps.googleusercontent.com"
+GOOGLE_REDIRECT_URI = "https://api.d1g.uk/v1/auth/google/callback"
 
 [[env.production.routes]]
 pattern = "hub.d1g.uk"
