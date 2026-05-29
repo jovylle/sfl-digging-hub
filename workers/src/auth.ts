@@ -196,6 +196,8 @@ async function ensureAuthProvider(
   providerSubject: string,
   options?: {
     legacySubjects?: string[];
+    /** Sign-in: keep an existing provider identity instead of re-linking. */
+    signIn?: boolean;
   },
 ): Promise<void> {
   const bySubject = await db
@@ -227,6 +229,9 @@ async function ensureAuthProvider(
         )
         .bind(providerSubject, userId, provider)
         .run();
+      return;
+    }
+    if (options?.signIn) {
       return;
     }
     throw new AuthConflictError(
@@ -545,6 +550,21 @@ export async function findOrCreateUserForProvider(
   providerSubject: string,
 ): Promise<UserRow> {
   const normalized = normalizeEmail(email);
+
+  const linkedUser = await db
+    .prepare(
+      `SELECT u.id, u.email, u.nickname, u.created_at
+       FROM auth_providers ap
+       JOIN users u ON u.id = ap.user_id
+       WHERE ap.provider = ? AND ap.provider_subject = ?
+       LIMIT 1`,
+    )
+    .bind(provider, providerSubject)
+    .first<UserRow>();
+  if (linkedUser) {
+    return linkedUser;
+  }
+
   let user = await db
     .prepare("SELECT id, email, nickname, created_at FROM users WHERE email = ?")
     .bind(normalized)
@@ -556,6 +576,7 @@ export async function findOrCreateUserForProvider(
     // Legacy Google sign-ins used email as provider_subject. Allow transparent
     // one-time upgrade to the stable Google subject when the same user signs in.
     legacySubjects: provider === "google" ? [normalized] : [],
+    signIn: true,
   });
   return user;
 }

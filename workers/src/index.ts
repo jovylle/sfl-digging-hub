@@ -58,7 +58,6 @@ import {
   type SnapshotRow,
 } from "./snapshots";
 import {
-  buildCommunityMeta,
   buildHomeMeta,
   buildSnapshotMeta,
   handleSnapshotOgPng,
@@ -121,9 +120,6 @@ async function metaForPath(
 ) {
   if (path === "/" || path === "") {
     return buildHomeMeta(hubBase, apiBase);
-  }
-  if (path === "/community" || path === "/community/") {
-    return buildCommunityMeta(hubBase, apiBase);
   }
   const digMatch = path.match(/^\/dig\/([^/]+)\/?$/);
   if (digMatch) {
@@ -235,11 +231,7 @@ export default {
       }
 
       if (path === "/v1/og/home.png" && request.method === "GET") {
-        return handleStaticOgPng(request, "home", cors);
-      }
-
-      if (path === "/v1/og/community.png" && request.method === "GET") {
-        return handleStaticOgPng(request, "community", cors);
+        return handleStaticOgPng(request, cors);
       }
 
       if (path === "/v1/dig-day" && request.method === "GET") {

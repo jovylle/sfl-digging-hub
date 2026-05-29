@@ -33,15 +33,7 @@ function snapshotToCard(row: SnapshotRow): OgCardData {
   };
 }
 
-function defaultCard(kind: "home" | "community"): OgCardData {
-  if (kind === "community") {
-    return {
-      title: "Community digs",
-      subtitle: "Daily desert digs from the community",
-      primary: "Browse today's shared digs",
-      footer: "hub.d1g.uk/community",
-    };
-  }
+function defaultCard(): OgCardData {
   return {
     title: "SFL Digging Hub",
     subtitle: "Save, replay, share desert digs",
@@ -89,13 +81,12 @@ export async function handleSnapshotOgPng(
 
 export async function handleStaticOgPng(
   request: Request,
-  kind: "home" | "community",
   cors: HeadersInit,
 ): Promise<Response> {
   const cached = await pngResponseFromCache(request);
   if (cached) return cached;
 
-  const png = await renderOgPng(defaultCard(kind));
+  const png = await renderOgPng(defaultCard());
   const response = new Response(png, {
     status: 200,
     headers: { ...PNG_CACHE_HEADERS, ...cors },
@@ -209,12 +200,3 @@ export function buildHomeMeta(hubBase: string, apiBase: string): MetaTags {
   };
 }
 
-export function buildCommunityMeta(hubBase: string, apiBase: string): MetaTags {
-  return {
-    title: "SFL Digging Hub — community digs",
-    description:
-      "Browse today's desert digs from the community. Comment, compare, and share your runs.",
-    image: `${apiBase.replace(/\/$/, "")}/v1/og/community.png`,
-    url: hubBase.replace(/\/$/, "") + "/community",
-  };
-}

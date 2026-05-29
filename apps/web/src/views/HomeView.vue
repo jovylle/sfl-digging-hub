@@ -6,13 +6,46 @@ import DigResultsGrid from "@/components/DigResultsGrid.vue";
 import { publicDigTitle } from "@/utils/anonymize";
 import { D1G_BASE_URL, D1G_LABEL } from "@/utils/d1gUrl";
 
+const PAGE_SIZE = 12;
+
 const apiOk = ref<boolean | null>(null);
 const feedItems = ref<CommunityItem[]>([]);
+const feedNextOffset = ref<number | null>(null);
 const feedLoading = ref(true);
+const feedLoadingMore = ref(false);
+const feedError = ref<string | null>(null);
 
 function treasureCount(item: CommunityItem): number {
   const n = item.stats?.treasureCount;
   return typeof n === "number" ? n : 0;
+}
+
+async function loadFeed(offset = 0) {
+  if (offset === 0) {
+    feedLoading.value = true;
+    feedError.value = null;
+  } else {
+    feedLoadingMore.value = true;
+    feedError.value = null;
+  }
+  try {
+    const res = await getCommunity({ limit: PAGE_SIZE, offset });
+    if (offset === 0) {
+      feedItems.value = res.items;
+    } else {
+      feedItems.value = feedItems.value.concat(res.items);
+    }
+    feedNextOffset.value = res.nextOffset;
+  } catch (e) {
+    feedError.value = e instanceof Error ? e.message : "Failed to load digs";
+    if (offset === 0) {
+      feedItems.value = [];
+      feedNextOffset.value = null;
+    }
+  } finally {
+    feedLoading.value = false;
+    feedLoadingMore.value = false;
+  }
 }
 
 onMounted(async () => {
@@ -23,14 +56,7 @@ onMounted(async () => {
     apiOk.value = false;
   }
 
-  try {
-    const res = await getCommunity({ limit: 6 });
-    feedItems.value = res.items;
-  } catch {
-    // feed is best-effort on home
-  } finally {
-    feedLoading.value = false;
-  }
+  await loadFeed();
 });
 </script>
 
@@ -63,13 +89,7 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      <RouterLink to="/community" class="card bg-base-200 hover:shadow-lg transition-shadow">
-        <div class="card-body">
-          <h2 class="card-title text-lg">Community</h2>
-          <p class="text-sm text-base-content/70">Random anonymous day grids</p>
-        </div>
-      </RouterLink>
+    <div class="grid sm:grid-cols-2 gap-4">
       <RouterLink to="/profile" class="card bg-base-200 hover:shadow-lg transition-shadow">
         <div class="card-body">
           <h2 class="card-title text-lg">My Land Digs</h2>
@@ -85,10 +105,10 @@ onMounted(async () => {
     </div>
 
     <div class="space-y-3">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold">Random digs</h2>
-        <RouterLink to="/community" class="text-sm link link-primary">View all →</RouterLink>
-      </div>
+      <h2 class="text-lg font-semibold">Random digs</h2>
+      <p class="text-sm text-base-content/60">
+        Random anonymous day grids — no land IDs shown.
+      </p>
 
       <div v-if="feedLoading" class="flex justify-center py-6">
         <span class="loading loading-spinner loading-md text-primary" />
@@ -96,29 +116,49 @@ onMounted(async () => {
 
       <div
         v-else-if="feedItems.length"
-        class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"
+        class="space-y-3"
       >
-        <RouterLink
-          v-for="item in feedItems"
-          :key="item.id"
-          :to="{ name: 'dig', params: { id: item.id } }"
-          class="card bg-base-200 hover:shadow-lg transition-shadow"
-        >
-          <div class="card-body py-3 px-3 gap-2">
-            <DigResultsGrid :digs="item.digs" compact class="w-full" />
-            <div class="min-w-0">
-              <p class="font-semibold text-sm truncate">
-                {{ publicDigTitle("public", item.displayName) }}
-              </p>
-              <p class="text-xs text-base-content/60">
-                {{ item.digCount }} digs
-                <span v-if="treasureCount(item) > 0"> · {{ treasureCount(item) }} treasures</span>
-              </p>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <RouterLink
+            v-for="item in feedItems"
+            :key="item.id"
+            :to="{ name: 'dig', params: { id: item.id } }"
+            class="card bg-base-200 hover:shadow-lg transition-shadow"
+          >
+            <div class="card-body py-3 px-3 gap-2">
+              <DigResultsGrid :digs="item.digs" compact class="w-full" />
+              <div class="min-w-0">
+                <p class="font-semibold text-sm truncate">
+                  {{ publicDigTitle("public", item.displayName) }}
+                </p>
+                <p class="text-xs text-base-content/60">
+                  {{ item.digCount }} digs
+                  <span v-if="treasureCount(item) > 0"> · {{ treasureCount(item) }} treasures</span>
+                </p>
+              </div>
             </div>
-          </div>
-        </RouterLink>
+          </RouterLink>
+        </div>
+
+        <div v-if="feedError" class="alert alert-warning text-sm">
+          <span>{{ feedError }}</span>
+        </div>
+
+        <div class="flex justify-center pt-1">
+          <button
+            v-if="feedNextOffset != null"
+            type="button"
+            class="btn btn-outline btn-sm"
+            :disabled="feedLoadingMore"
+            @click="loadFeed(feedNextOffset!)"
+          >
+            <span v-if="feedLoadingMore" class="loading loading-spinner loading-xs" />
+            {{ feedLoadingMore ? "Loading..." : "More random digs" }}
+          </button>
+        </div>
       </div>
 
+      <p v-else-if="feedError" class="text-error text-sm">{{ feedError }}</p>
       <p v-else class="text-base-content/50 text-sm">No public digs yet.</p>
     </div>
   </section>

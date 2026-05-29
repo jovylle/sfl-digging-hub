@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "./views/HomeView.vue";
 import DigView from "./views/DigView.vue";
-import CommunityView from "./views/CommunityView.vue";
 import PracticeView from "./views/PracticeView.vue";
 import ProfileView from "./views/ProfileView.vue";
 
@@ -16,7 +15,7 @@ export const router = createRouter({
     },
     { path: "/journal", redirect: { name: "profile", hash: "#lands" } },
     { path: "/land/:landId", redirect: { name: "profile", hash: "#lands" } },
-    { path: "/community", name: "community", component: CommunityView },
+    { path: "/community", redirect: { name: "home" } },
     { path: "/practice", name: "practice", component: PracticeView },
     { path: "/profile", name: "profile", component: ProfileView },
   ],

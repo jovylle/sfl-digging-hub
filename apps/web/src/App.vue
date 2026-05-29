@@ -133,9 +133,6 @@ onBeforeUnmount(clearSignInPoll);
         </RouterLink>
       </div>
       <nav class="flex-none gap-1">
-        <RouterLink to="/community" class="btn btn-ghost btn-sm" active-class="btn-active">
-          Community
-        </RouterLink>
         <RouterLink
           :to="sessionInfo ? { name: 'profile', hash: '#lands' } : { name: 'profile' }"
           class="btn btn-ghost btn-sm"
@@ -229,7 +226,7 @@ onBeforeUnmount(clearSignInPoll);
             :disabled="signInPending"
             @click="startSignIn"
           >
-            {{ signInPending ? "Waiting for approval..." : "Send approve link" }}
+            {{ signInPending ? "Waiting for approval..." : "Send Approve Login Link" }}
           </button>
           <button
             v-if="signInPending"
