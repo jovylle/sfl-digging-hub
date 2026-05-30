@@ -15,7 +15,10 @@ Pushes to `master` or `development` run [.github/workflows/deploy.yml](../.githu
 
 **One-time setup**
 
-1. Cloudflare dashboard → **My Profile** → **API Tokens** → create token with **Edit Cloudflare Workers** (and account read).
+1. Cloudflare dashboard → **My Profile** → **API Tokens** → create token with:
+   - **Account → Workers Scripts → Edit** (deploy Workers)
+   - **Account → D1 → Edit** (apply D1 migrations in CI)
+   - **Account → Account Settings → Read**
 2. GitHub repo → **Settings** → **Secrets and variables** → **Actions** → add `CLOUDFLARE_API_TOKEN`.
 3. If `account_id` is not in `wrangler.toml`, also add `CLOUDFLARE_ACCOUNT_ID`.
 
